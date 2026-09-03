@@ -69,6 +69,7 @@ const MainLayout: React.FC = () => {
             <Route path="/cases/:caseId/discrepancies" element={<DiscrepancyReviewScreen />} />
             <Route path="/discrepancies" element={<DiscrepancyReviewScreen />} />
             <Route path="/sources" element={<SourceChecksScreen />} />
+            <Route path="/source-checks" element={<SourceChecksScreen />} />
             <Route path="/reports" element={<ReportsScreen />} />
             <Route path="/gazette" element={<GazetteScreen />} />
             <Route path="/audit" element={<AuditTrailScreen />} />

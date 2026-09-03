@@ -44,16 +44,9 @@ export const apiClient = {
   },
 
   async uploadDocument(file: File, credentialType: string): Promise<any> {
-    // Convert file to base64 to bypass Vercel serverless multipart issues
-    const toBase64 = (f: File) => new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(f);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
-    });
+    // To completely bypass Vercel's 4.5MB Serverless Function payload limit, 
+    // we won't send the heavy base64 string to the mock backend.
     
-    const fileBase64 = await toBase64(file);
-
     const headers: Record<string, string> = {
       ...getAuthHeaders(),
       'Content-Type': 'application/json'
@@ -64,7 +57,7 @@ export const apiClient = {
       headers,
       body: JSON.stringify({
         filename: file.name,
-        fileBase64,
+        fileBase64: 'MOCK_BASE64_OMITTED_FOR_VERCEL',
         credentialType
       }),
     });

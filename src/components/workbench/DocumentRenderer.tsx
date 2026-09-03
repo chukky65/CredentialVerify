@@ -258,6 +258,19 @@ export const DocumentRenderer: React.FC<DocumentRendererProps> = ({
 
       case 'CITIZENSHIP_CERT':
       default:
+        // If this is a locally uploaded image preview
+        if (document.fileUrl) {
+          return (
+            <div className="w-full h-full relative select-none">
+              <img 
+                src={document.fileUrl} 
+                alt="Document preview" 
+                className="w-full h-full object-contain pointer-events-none"
+              />
+            </div>
+          );
+        }
+
         return (
           <div className="w-full h-full p-8 sm:p-12 flex flex-col justify-between bg-white border-4 border-slate-300 relative select-none">
             <div className="text-center border-b border-slate-200 pb-4 space-y-1">

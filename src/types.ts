@@ -96,6 +96,7 @@ export interface SubmittedDocument {
   uploadTimestamp: string;
   mimeType: string;
   totalPages: number;
+  fileUrl?: string;
   extractedFields: ExtractedField[];
   qualityWarnings: QualityWarning[];
   status: VerificationStatus;

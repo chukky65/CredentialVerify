@@ -469,6 +469,7 @@ export const CreateCandidateScreen: React.FC = () => {
                                   uploadProgress: 100,
                                   scanStatus: 'CLEAN' as const,
                                   isDuplicate: false,
+                                  fileUrl: URL.createObjectURL(file), // Store local URL for preview
                                 };
                                 setUploadedFiles((prev) => [...prev, newFile]);
                                 addToast(`${cred.title} uploaded successfully.`, 'success');

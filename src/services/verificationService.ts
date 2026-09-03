@@ -78,10 +78,11 @@ export const verificationService = {
           fileName: doc.fileName || `Document_${index + 1}.pdf`,
           fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
           uploadTimestamp: new Date().toISOString(),
-          mimeType: 'application/pdf',
+          mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
           totalPages: Math.floor(Math.random() * 5) + 1,
           status: 'CLEAN',
           vectorDocType: 'STANDARD_CERTIFICATE',
+          fileUrl: doc.fileUrl,
           extractedFields: [],
           qualityWarnings: []
         }));
@@ -101,10 +102,11 @@ export const verificationService = {
           fileName: doc.fileName || `Document_${index + 1}.pdf`,
           fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
           uploadTimestamp: new Date().toISOString(),
-          mimeType: 'application/pdf',
+          mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
           totalPages: Math.floor(Math.random() * 5) + 1,
           status: 'CLEAN',
           vectorDocType: 'STANDARD_CERTIFICATE',
+          fileUrl: doc.fileUrl, // Important for preview
           extractedFields: [],
           qualityWarnings: []
         })),

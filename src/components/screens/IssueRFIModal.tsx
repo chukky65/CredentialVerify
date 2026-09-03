@@ -114,7 +114,7 @@ export const IssueRFIModal: React.FC<IssueRFIModalProps> = ({
       cancelLabel="Cancel"
       variant="primary"
     >
-      <div className="space-y-4 pt-2 text-xs max-h-[70vh] overflow-y-auto pr-1">
+      <div className="space-y-4 pt-2 text-xs">
         {error && (
           <div className="p-2.5 bg-red-50 border border-red-200 rounded text-red-700 font-medium">
             {error}

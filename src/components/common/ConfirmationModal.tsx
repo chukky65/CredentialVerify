@@ -37,7 +37,6 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      setTimeout(() => confirmButtonRef.current?.focus(), 50);
       window.addEventListener('keydown', handleKeyDown);
     } else {
       document.body.style.overflow = '';
@@ -87,7 +86,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     >
       <div
         ref={modalRef}
-        className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+        className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden"
       >
         {/* Modal Header */}
         <div className="flex items-start justify-between p-5 border-b border-slate-100 bg-slate-50/50">
@@ -114,7 +113,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto">
           <p id="modal-description" className="text-sm text-[#5B6777] leading-relaxed">
             {description}
           </p>
@@ -130,7 +129,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 bg-slate-50 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-3 p-4 bg-slate-50 border-t border-slate-200 shrink-0">
           <button
             type="button"
             id="modal-cancel-btn"

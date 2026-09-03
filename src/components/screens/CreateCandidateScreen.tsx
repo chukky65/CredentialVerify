@@ -42,7 +42,7 @@ export const CreateCandidateScreen: React.FC = () => {
     otherNames: '',
     dateOfBirth: '',
     electionId: 'elec_2026_nat',
-    electionName: '2026 Pacifica National Assembly',
+    electionName: 'President',
     officeContested: 'Member of Parliament - Constituency 1',
     jurisdiction: 'Metropolis Central',
     contactEmail: '',
@@ -303,9 +303,9 @@ export const CreateCandidateScreen: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, electionName: e.target.value })}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
                 >
-                  <option value="2026 Pacifica National Assembly">2026 Pacifica National Assembly</option>
-                  <option value="2026 Capital Territory Gubernatorial">2026 Capital Territory Gubernatorial</option>
-                  <option value="2026 Western Province Judicial Council">2026 Western Province Judicial Council</option>
+                  <option value="President">President</option>
+                  <option value="Senate">Senate</option>
+                  <option value="House of Representative">House of Representative</option>
                 </select>
               </div>
 

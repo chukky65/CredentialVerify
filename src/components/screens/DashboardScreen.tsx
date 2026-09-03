@@ -137,10 +137,25 @@ export const DashboardScreen: React.FC = () => {
             className="text-xs bg-[#F5F7FA] border border-slate-300 rounded-md px-3 py-1.5 text-[#17202A] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
           >
             <option value="ALL">All Jurisdictions</option>
-            <option value="Metropolis Central">Metropolis Central</option>
-            <option value="Capital Metropolitan Area">Capital Metropolitan Area</option>
-            <option value="Western Province High Court">Western Province High Court</option>
-            <option value="Northern Maritime Province">Northern Maritime Province</option>
+            <optgroup label="Federal">
+              <option value="National (All States)">National (All States)</option>
+            </optgroup>
+            <optgroup label="States">
+              <option value="Lagos State">Lagos State</option>
+              <option value="Kano State">Kano State</option>
+              <option value="Rivers State">Rivers State</option>
+              <option value="FCT Abuja">FCT Abuja</option>
+            </optgroup>
+            <optgroup label="Senatorial Districts">
+              <option value="Lagos Central Senatorial District">Lagos Central Senatorial District</option>
+              <option value="Kano South Senatorial District">Kano South Senatorial District</option>
+              <option value="Rivers East Senatorial District">Rivers East Senatorial District</option>
+            </optgroup>
+            <optgroup label="Local Government Areas">
+              <option value="Ikeja LGA">Ikeja LGA</option>
+              <option value="Kano Municipal LGA">Kano Municipal LGA</option>
+              <option value="Port Harcourt LGA">Port Harcourt LGA</option>
+            </optgroup>
           </select>
         </div>
 

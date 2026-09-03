@@ -43,8 +43,8 @@ export const CreateCandidateScreen: React.FC = () => {
     dateOfBirth: '',
     electionId: 'elec_2026_nat',
     electionName: 'President',
-    officeContested: 'Member of Parliament - Constituency 1',
-    jurisdiction: 'Metropolis Central',
+    officeContested: 'President',
+    jurisdiction: 'National (All States)',
     contactEmail: '',
     contactPhone: '',
     agreedToPrivacyNotice: false,
@@ -320,6 +320,37 @@ export const CreateCandidateScreen: React.FC = () => {
                   placeholder="e.g. Member of Parliament - Constituency 4"
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#17202A] mb-1">
+                  Jurisdiction <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.jurisdiction}
+                  onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
+                >
+                  <optgroup label="Federal">
+                    <option value="National (All States)">National (All States)</option>
+                  </optgroup>
+                  <optgroup label="States">
+                    <option value="Lagos State">Lagos State</option>
+                    <option value="Kano State">Kano State</option>
+                    <option value="Rivers State">Rivers State</option>
+                    <option value="FCT Abuja">FCT Abuja</option>
+                  </optgroup>
+                  <optgroup label="Senatorial Districts">
+                    <option value="Lagos Central Senatorial District">Lagos Central Senatorial District</option>
+                    <option value="Kano South Senatorial District">Kano South Senatorial District</option>
+                    <option value="Rivers East Senatorial District">Rivers East Senatorial District</option>
+                  </optgroup>
+                  <optgroup label="Local Government Areas">
+                    <option value="Ikeja LGA">Ikeja LGA</option>
+                    <option value="Kano Municipal LGA">Kano Municipal LGA</option>
+                    <option value="Port Harcourt LGA">Port Harcourt LGA</option>
+                  </optgroup>
+                </select>
               </div>
 
               <div>

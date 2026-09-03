@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { verificationService } from '../../services/verificationService';
 import { apiClient } from '../../services/apiClient';
 import { CredentialType, SubmittedDocument } from '../../types';
+import { NIGERIA_JURISDICTIONS } from '../../data/jurisdictions';
 import {
   CheckCircle2,
   Upload,
@@ -49,6 +50,8 @@ export const CreateCandidateScreen: React.FC = () => {
     contactPhone: '',
     agreedToPrivacyNotice: false,
   });
+
+  const [selectedStateForLga, setSelectedStateForLga] = useState('');
 
   // Real Uploaded Documents State
   const [uploadedFiles, setUploadedFiles] = useState<
@@ -300,7 +303,13 @@ export const CreateCandidateScreen: React.FC = () => {
                 </label>
                 <select
                   value={formData.electionName}
-                  onChange={(e) => setFormData({ ...formData, electionName: e.target.value })}
+                  onChange={(e) => {
+                    const newElection = e.target.value;
+                    let newJurisdiction = '';
+                    if (newElection === 'President') newJurisdiction = 'National (All States)';
+                    setFormData({ ...formData, electionName: newElection, jurisdiction: newJurisdiction });
+                    setSelectedStateForLga('');
+                  }}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
                 >
                   <option value="President">President</option>
@@ -322,69 +331,81 @@ export const CreateCandidateScreen: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#17202A] mb-1">
-                  Jurisdiction <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.jurisdiction}
-                  onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
-                >
-                  <optgroup label="Federal">
+              {formData.electionName === 'President' && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#17202A] mb-1">
+                    Jurisdiction <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.jurisdiction}
+                    onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
+                  >
                     <option value="National (All States)">National (All States)</option>
-                  </optgroup>
-                  <optgroup label="States">
-                    <option value="Abia State">Abia State</option>
-                    <option value="Adamawa State">Adamawa State</option>
-                    <option value="Akwa Ibom State">Akwa Ibom State</option>
-                    <option value="Anambra State">Anambra State</option>
-                    <option value="Bauchi State">Bauchi State</option>
-                    <option value="Bayelsa State">Bayelsa State</option>
-                    <option value="Benue State">Benue State</option>
-                    <option value="Borno State">Borno State</option>
-                    <option value="Cross River State">Cross River State</option>
-                    <option value="Delta State">Delta State</option>
-                    <option value="Ebonyi State">Ebonyi State</option>
-                    <option value="Edo State">Edo State</option>
-                    <option value="Ekiti State">Ekiti State</option>
-                    <option value="Enugu State">Enugu State</option>
-                    <option value="FCT - Abuja">FCT - Abuja</option>
-                    <option value="Gombe State">Gombe State</option>
-                    <option value="Imo State">Imo State</option>
-                    <option value="Jigawa State">Jigawa State</option>
-                    <option value="Kaduna State">Kaduna State</option>
-                    <option value="Kano State">Kano State</option>
-                    <option value="Katsina State">Katsina State</option>
-                    <option value="Kebbi State">Kebbi State</option>
-                    <option value="Kogi State">Kogi State</option>
-                    <option value="Kwara State">Kwara State</option>
-                    <option value="Lagos State">Lagos State</option>
-                    <option value="Nasarawa State">Nasarawa State</option>
-                    <option value="Niger State">Niger State</option>
-                    <option value="Ogun State">Ogun State</option>
-                    <option value="Ondo State">Ondo State</option>
-                    <option value="Osun State">Osun State</option>
-                    <option value="Oyo State">Oyo State</option>
-                    <option value="Plateau State">Plateau State</option>
-                    <option value="Rivers State">Rivers State</option>
-                    <option value="Sokoto State">Sokoto State</option>
-                    <option value="Taraba State">Taraba State</option>
-                    <option value="Yobe State">Yobe State</option>
-                    <option value="Zamfara State">Zamfara State</option>
-                  </optgroup>
-                  <optgroup label="Senatorial Districts">
-                    <option value="Lagos Central Senatorial District">Lagos Central Senatorial District</option>
-                    <option value="Kano South Senatorial District">Kano South Senatorial District</option>
-                    <option value="Rivers East Senatorial District">Rivers East Senatorial District</option>
-                  </optgroup>
-                  <optgroup label="Local Government Areas">
-                    <option value="Ikeja LGA">Ikeja LGA</option>
-                    <option value="Kano Municipal LGA">Kano Municipal LGA</option>
-                    <option value="Port Harcourt LGA">Port Harcourt LGA</option>
-                  </optgroup>
-                </select>
-              </div>
+                    {NIGERIA_JURISDICTIONS.map(s => (
+                      <option key={s.state} value={s.state}>{s.state}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {formData.electionName === 'Senate' && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#17202A] mb-1">
+                    Senatorial District <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.jurisdiction}
+                    onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
+                  >
+                    <option value="">Select a Senatorial District</option>
+                    {NIGERIA_JURISDICTIONS.flatMap(s => s.senatorialDistricts).map(sd => (
+                      <option key={sd} value={sd}>{sd}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {formData.electionName === 'House of Representative' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#17202A] mb-1">
+                      State <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={selectedStateForLga}
+                      onChange={(e) => {
+                        setSelectedStateForLga(e.target.value);
+                        setFormData({ ...formData, jurisdiction: '' });
+                      }}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
+                    >
+                      <option value="">Select State</option>
+                      {NIGERIA_JURISDICTIONS.map(s => (
+                        <option key={s.state} value={s.state}>{s.state}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#17202A] mb-1">
+                      Local Government Area <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.jurisdiction}
+                      onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
+                      disabled={!selectedStateForLga}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5] disabled:opacity-50"
+                    >
+                      <option value="">Select LGA</option>
+                      {selectedStateForLga && NIGERIA_JURISDICTIONS.find(s => s.state === selectedStateForLga)?.lgas.map(lga => (
+                        <option key={lga} value={`${lga} LGA, ${selectedStateForLga}`}>{lga}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
 
               <div>
                 <label className="block text-xs font-semibold text-[#17202A] mb-1">

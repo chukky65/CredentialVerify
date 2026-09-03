@@ -1,0 +1,239 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Candidate {
+  id                  String             @id @default(uuid())
+  referenceCode       String             @unique
+  fullName            String
+  otherNames          String?
+  dateOfBirth         String
+  electionId          String
+  electionName        String
+  officeContested     String
+  jurisdiction        String
+  contactEmail        String
+  contactPhone        String
+  submissionDate      DateTime
+  status              String
+  completenessScore   Int
+  assignedReviewerId  String
+  assignedReviewerName String
+  lastUpdated         DateTime           @updatedAt
+  is_demo             Boolean            @default(false)
+
+  documents           SubmittedDocument[]
+  cases               VerificationCase[]
+}
+
+model SubmittedDocument {
+  id                  String             @id @default(uuid())
+  candidateId         String
+  candidate           Candidate          @relation(fields: [candidateId], references: [id])
+  credentialType      String
+  credentialTitle     String
+  fileName            String
+  fileSizeBytes       Int
+  uploadTimestamp     DateTime
+  mimeType            String
+  totalPages          Int
+  status              String
+  vectorDocType       String
+  
+  extractedFields     ExtractedField[]
+  qualityWarnings     QualityWarning[]
+}
+
+model ExtractedField {
+  id                    String            @id @default(uuid())
+  documentId            String
+  document              SubmittedDocument @relation(fields: [documentId], references: [id])
+  fieldKey              String
+  fieldName             String
+  originalValue         String
+  normalizedValue       String
+  correctedValue        String?
+  isCorrected           Boolean           @default(false)
+  correctionReasonCode  String?
+  correctionReasonNote  String?
+  correctionNote        String?
+  reviewerNote          String?
+  extractionConfidence  Int
+  status                String
+  evidencePage          Int
+  evidenceRegionX       Float?
+  evidenceRegionY       Float?
+  evidenceRegionW       Float?
+  evidenceRegionH       Float?
+  evidenceRegionLabel   String?
+  sourceStatus          String
+  verifiedAgainstSource String?
+  isUnreadable          Boolean           @default(false)
+  isUnsupported         Boolean           @default(false)
+}
+
+model QualityWarning {
+  id         String            @id @default(uuid())
+  documentId String
+  document   SubmittedDocument @relation(fields: [documentId], references: [id])
+  type       String
+  message    String
+  severity   String
+}
+
+model VerificationCase {
+  id                   String             @id @default(uuid())
+  caseReference        String             @unique
+  candidateId          String
+  candidate            Candidate          @relation(fields: [candidateId], references: [id])
+  candidateName        String
+  electionName         String
+  officeContested      String
+  jurisdiction         String
+  workflowStatus       String
+  stage                String
+  priority             String
+  assignedReviewerId   String
+  assignedReviewerName String
+  submissionDate       DateTime
+  slaDeadline          DateTime
+  ageHours             Int
+  reasonForReview      String
+  documentsCount       Int
+  claimsCount          Int
+  sourceChecksCount    Int
+  discrepanciesCount   Int
+  openItemsCount       Int
+  is_demo              Boolean            @default(false)
+
+  recommendation       Json?
+
+  sourceChecks         SourceCheck[]
+  discrepancies        DiscrepancyItem[]
+  rfis                 CandidateRFI[]
+}
+
+model SourceCheck {
+  id                   String           @id @default(uuid())
+  caseId               String
+  case                 VerificationCase @relation(fields: [caseId], references: [id])
+  authorityName        String
+  credentialType       String
+  checkedTimestamp     DateTime
+  responseTimeMs       Int
+  resultStatus         String
+  reliabilityTier      String
+  connectorStatus      String
+  evidenceReference    String
+  responsePayloadSummary String?
+  is_demo              Boolean          @default(false)
+}
+
+model DiscrepancyItem {
+  id                       String           @id @default(uuid())
+  caseId                   String
+  case                     VerificationCase @relation(fields: [caseId], references: [id])
+  claimType                String
+  fieldLabel               String
+  candidateDocumentValue   String
+  authoritativeSourceValue String
+  sourceName               String
+  evidenceLocation         String
+  dateChecked              DateTime
+  reliabilityTier          String
+  status                   String
+  resolution               String?
+  resolutionNote           String?
+  resolvedBy               String?
+  is_demo                  Boolean          @default(false)
+}
+
+model CandidateRFI {
+  id                         String           @id @default(uuid())
+  rfiNumber                  String           @unique
+  caseId                     String
+  case                       VerificationCase @relation(fields: [caseId], references: [id])
+  caseReference              String
+  candidateId                String
+  candidateName              String
+  statutoryBasis             String
+  subject                    String
+  discrepancyRef             String?
+  credentialType             String
+  instructions               String
+  curingRequirements         String[]
+  issuedByStaffId            String
+  issuedByName               String
+  issuedTimestamp            DateTime
+  responseDeadline           DateTime
+  status                     String
+  candidateResponseText      String?
+  candidateResponseTimestamp DateTime?
+  submittedByAgentName       String?
+  adjudicationNote           String?
+  adjudicatedBy              String?
+  adjudicatedTimestamp       DateTime?
+  resolutionOutcome          String?
+  is_demo                    Boolean          @default(false)
+
+  attachments                RFIAttachment[]
+}
+
+model RFIAttachment {
+  id            String       @id @default(uuid())
+  rfiId         String
+  rfi           CandidateRFI @relation(fields: [rfiId], references: [id])
+  fileName      String
+  fileSizeBytes Int
+  uploadedAt    DateTime
+  description   String
+  sha256Hash    String?
+}
+
+model AuditLogEvent {
+  id             String    @id @default(uuid())
+  timestamp      DateTime
+  actorId        String?
+  actorStaffId   String?
+  actorName      String
+  actorRole      String
+  eventType      String
+  action         String?
+  summary        String?
+  description    String?
+  previousValue  String?
+  newValue       String?
+  reason         String?
+  reasonCode     String?
+  notes          String?
+  caseReference  String?
+  eventHash      String?
+  technicalHash  String?
+  severity       String
+  is_demo        Boolean   @default(false)
+}
+
+model StatutoryRule {
+  id              String   @id @default(uuid())
+  ruleCode        String   @unique
+  name            String
+  description     String
+  targetOffice    String
+  credentialType  String
+  fieldKey        String
+  operator        String
+  expectedValue   String
+  statutoryBasis  String
+  severity        String
+  actionOnFail    String
+  isActive        Boolean  @default(true)
+  createdBy       String
+  createdAt       DateTime @default(now())
+  is_demo         Boolean  @default(false)
+}

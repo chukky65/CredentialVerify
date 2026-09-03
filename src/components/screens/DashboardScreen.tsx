@@ -153,13 +153,14 @@ export const DashboardScreen: React.FC = () => {
             <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh Feed</span>
           </button>
-          <button
-            type="button"
-            onClick={() => navigateTo('create-candidate')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#17324D] hover:bg-[#0f2337] rounded-md shadow-xs focus:outline-none focus:ring-2 focus:ring-[#2F75B5]"
-          >
-            <span>+ New Candidate Intake</span>
-          </button>
+          <button 
+              type="button"
+              onClick={() => navigateTo('candidates/new')}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-[#17324D] text-white rounded-md hover:bg-[#0F2236] transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] shadow-xs text-sm font-semibold"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Intake New Candidate</span>
+            </button>
         </div>
       </div>
 

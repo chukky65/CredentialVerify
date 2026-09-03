@@ -37,22 +37,22 @@ const MainLayout: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen bg-[#F5F7FA] text-[#17202A] flex flex-col font-sans selection:bg-[#2F75B5]/20 selection:text-[#17324D] ${
+      className={`h-screen bg-[#F5F7FA] text-[#17202A] flex font-sans selection:bg-[#2F75B5]/20 selection:text-[#17324D] ${
         highContrastMode ? 'high-contrast' : ''
       } ${textScaleLarge ? 'text-scale-large' : ''}`}
     >
-      {/* Global App Header with role switcher & PII mask controls */}
-      <AppHeader />
+      {/* Sidebar Navigation */}
+      <SidebarNav />
 
-      {/* Main Workspace Layout with Sidebar & Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar Navigation */}
-        <SidebarNav />
+      {/* Main Workspace Column */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Global App Header */}
+        <AppHeader />
 
         {/* Main Content Area */}
         <main
           id="main-content-area"
-          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full"
+          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 mx-auto w-full max-w-7xl"
           tabIndex={-1}
         >
           <Routes>

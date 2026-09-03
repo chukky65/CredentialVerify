@@ -96,7 +96,7 @@ export const CandidateDirectoryScreen: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigateTo('create-candidate')}
+            onClick={() => navigateTo('candidates/new')}
             className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#17324D] hover:bg-[#0f2337] rounded-md shadow-xs transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] flex-1 sm:flex-none"
           >
             <Plus className="w-4 h-4" />

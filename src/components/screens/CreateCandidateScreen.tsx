@@ -146,6 +146,7 @@ export const CreateCandidateScreen: React.FC = () => {
         assignedReviewerId: 'usr_analyst_01',
         assignedReviewerName: 'Elena Vance',
         documentIds: docsToSubmit,
+        uploadedDocuments: uploadedFiles, // Pass full objects for local mocking
       });
 
       await refreshData();

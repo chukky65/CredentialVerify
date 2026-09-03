@@ -17,6 +17,7 @@ import {
   RefreshCw,
   ExternalLink,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 import {
   ResponsiveContainer,

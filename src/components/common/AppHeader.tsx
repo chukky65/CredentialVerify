@@ -190,7 +190,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           id="toggle-high-contrast-btn"
           onClick={toggleHighContrast}
           title={highContrastMode ? 'High Contrast Mode is ON (click for Standard)' : 'Switch to High Contrast Accessibility Mode'}
-          className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] ${
+          className={`hidden sm:flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] ${
             highContrastMode
               ? 'bg-black text-white border-black ring-1 ring-black'
               : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -207,7 +207,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           id="toggle-text-scale-btn"
           onClick={toggleTextScale}
           title={textScaleLarge ? 'Text scaling is Large (+10%)' : 'Switch to Large Accessible Typography'}
-          className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] ${
+          className={`hidden sm:flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] ${
             textScaleLarge
               ? 'bg-[#17324D] text-white border-[#17324D]'
               : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -232,7 +232,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             );
           }}
           title={maskSensitiveData ? 'PII is currently masked (click to reveal)' : 'PII is unmasked (click to mask)'}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] ${
+          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-[#2F75B5] ${
             maskSensitiveData
               ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
               : 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
@@ -262,7 +262,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </div>
 
         {/* Notifications Dropdown */}
-        <div className="relative">
+        <div className="relative hidden sm:block">
           <button
             type="button"
             id="notifications-menu-btn"
@@ -307,7 +307,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </div>
 
         {/* Active Role Selector (Testing & Demonstration Feature) */}
-        <div className="relative">
+        <div className="relative hidden sm:block">
           <button
             type="button"
             id="role-switcher-btn"

@@ -131,7 +131,7 @@ export const CreateCandidateScreen: React.FC = () => {
       // We assemble the real payload for the backend API
       const docsToSubmit = uploadedFiles.map(f => f.id);
 
-      const created = await apiClient.createCandidate({
+      const created = await verificationService.createCandidate({
         referenceCode: formData.referenceCode,
         fullName: formData.fullName,
         otherNames: formData.otherNames,
@@ -151,6 +151,9 @@ export const CreateCandidateScreen: React.FC = () => {
       await refreshData();
       addToast(`Candidate ${created.fullName} (${created.referenceCode}) successfully registered into verification pipeline.`, 'success');
       navigateTo('candidates');
+    } catch (err) {
+      console.error(err);
+      addToast('An unexpected error occurred during submission.', 'error');
     } finally {
       setIsSubmitting(false);
     }

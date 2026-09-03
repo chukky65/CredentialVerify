@@ -403,70 +403,99 @@ export const CreateCandidateScreen: React.FC = () => {
             <div className="border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-[#17202A]">Step 3: Document Intake & Validation</h3>
               <p className="text-xs text-[#5B6777]">
-                Upload official certified copies. Supported formats: PDF, TIFF, JPEG (Max 25MB per file).
+                Upload official certified copies for each required credential. Supported formats: PDF, TIFF, JPEG (Max 25MB per file).
               </p>
             </div>
 
-            {/* Real File Upload Zone */}
-            <div className="relative">
-              <input 
-                type="file" 
-                id="file-upload" 
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                onChange={handleFileUpload}
-                disabled={isUploading}
-              />
-              <div
-                className={`p-8 border-2 border-dashed rounded-xl text-center transition-colors cursor-pointer ${
-                  isUploading ? 'border-[#2F75B5] bg-[#2F75B5]/10' : 'border-slate-300 hover:border-slate-400 bg-slate-50/50'
-                }`}
-              >
-                <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-xs font-bold text-[#17202A]">
-                  {isUploading ? 'Uploading to Supabase...' : 'Click or drop files here to upload'}
-                </p>
-                <p className="text-[11px] text-[#5B6777] mt-1">
-                  Automated malware scan, page count verification, and duplicate hash checking enabled.
-                </p>
-              </div>
-            </div>
+            <div className="space-y-4">
+              {getRequiredCredentials().map((cred) => {
+                const uploadedFile = uploadedFiles.find((f) => f.credentialType === cred.type);
 
-            {/* Uploaded Documents List */}
-            <div className="space-y-2.5">
-              <h4 className="text-xs font-semibold text-[#17202A] uppercase tracking-wider">
-                Ingested Documents ({uploadedFiles.length})
-              </h4>
-              {uploadedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="p-3 bg-[#F5F7FA] border border-slate-200 rounded-lg flex items-center justify-between text-xs"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="w-5 h-5 text-[#2F75B5] shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-semibold text-[#17202A] truncate">{file.fileName}</p>
-                      <p className="text-[11px] text-[#5B6777]">
-                        {(file.fileSizeBytes / 1000000).toFixed(2)} MB • {file.credentialType.replace(/_/g, ' ')}
-                      </p>
+                return (
+                  <div key={cred.type} className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${uploadedFile ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                        {uploadedFile ? <CheckCircle2 className="w-4 h-4" /> : <FileText className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-[#17202A]">{cred.title}</p>
+                        <p className="text-xs text-[#5B6777]">
+                          {cred.required ? 'Mandatory Requirement' : 'Optional (If Applicable)'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="flex items-center gap-1 text-[#237A57] font-semibold text-[11px]">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Clean (Scanned)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setUploadedFiles(uploadedFiles.filter((f) => f.id !== file.id))}
-                      className="text-slate-400 hover:text-red-600 p-1"
-                      aria-label="Remove document"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    {uploadedFile ? (
+                      <div className="flex items-center gap-3 shrink-0 bg-white px-3 py-2 border border-slate-200 rounded-lg">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-[#17202A] truncate max-w-[150px]">{uploadedFile.fileName}</p>
+                          <span className="flex items-center gap-1 text-[#237A57] font-semibold text-[10px]">
+                            <ShieldCheck className="w-3 h-3" />
+                            Clean (Scanned)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setUploadedFiles(uploadedFiles.filter((f) => f.id !== uploadedFile.id))}
+                          className="text-slate-400 hover:text-red-600 p-1 bg-slate-50 rounded"
+                          title="Remove document"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative shrink-0">
+                        <input
+                          type="file"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                          title={`Upload ${cred.title}`}
+                          disabled={isUploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            
+                            setIsUploading(true);
+                            apiClient.uploadDocument(file, cred.type)
+                              .then((response) => {
+                                const newFile = {
+                                  id: response.document.id || `f_${Date.now()}`,
+                                  fileName: file.name,
+                                  credentialType: cred.type,
+                                  fileSizeBytes: file.size,
+                                  uploadProgress: 100,
+                                  scanStatus: 'CLEAN' as const,
+                                  isDuplicate: false,
+                                };
+                                setUploadedFiles((prev) => [...prev, newFile]);
+                                addToast(`${cred.title} uploaded successfully.`, 'success');
+                              })
+                              .catch((err) => {
+                                console.error(err);
+                                addToast(`Failed to upload ${cred.title}.`, 'error');
+                              })
+                              .finally(() => {
+                                setIsUploading(false);
+                                e.target.value = '';
+                              });
+                          }}
+                        />
+                        <button 
+                          type="button" 
+                          className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#17324D] bg-white border border-[#17324D] hover:bg-[#17324D] hover:text-white transition-colors rounded-md shadow-xs focus:outline-none"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload File</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+            
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <p>All uploaded files are subjected to automated malware scans, page count verification, and cryptographic hash duplicate checks upon ingestion.</p>
             </div>
           </div>
         )}

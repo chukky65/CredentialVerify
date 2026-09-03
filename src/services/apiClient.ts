@@ -44,19 +44,29 @@ export const apiClient = {
   },
 
   async uploadDocument(file: File, credentialType: string): Promise<any> {
-    const formData = new FormData();
-    formData.append('document', file);
-    formData.append('credentialType', credentialType);
+    // Convert file to base64 to bypass Vercel serverless multipart issues
+    const toBase64 = (f: File) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(f);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+    
+    const fileBase64 = await toBase64(file);
 
     const headers: Record<string, string> = {
-      'Authorization': getAuthHeaders().Authorization
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json'
     };
-    // Note: Do NOT set Content-Type for FormData, the browser sets it automatically with the boundary
 
     const response = await fetch(`${API_BASE}/documents/upload`, {
       method: 'POST',
       headers,
-      body: formData,
+      body: JSON.stringify({
+        filename: file.name,
+        fileBase64,
+        credentialType
+      }),
     });
     if (!response.ok) throw new Error('Failed to upload document');
     return response.json();

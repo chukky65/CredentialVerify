@@ -40,19 +40,21 @@ app.post('/api/auth/login', (req, res) => {
   return res.status(401).json({ error: 'Invalid credentials' });
 });
 
-// Protected Document Upload Endpoint
-app.post('/api/documents/upload', authenticateToken, upload.single('document'), (req, res) => {
-  if (!req.file) {
+// Protected Document Upload Endpoint (Accepts JSON to bypass Vercel serverless multipart issues)
+app.post('/api/documents/upload', authenticateToken, (req, res) => {
+  const { filename, fileBase64, credentialType } = req.body;
+  if (!filename || !fileBase64) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
   
-  // In a real Vercel app, you would upload to AWS S3 or Supabase Storage here.
+  // In a real app, you would upload the base64 buffer to AWS S3 or Supabase Storage here.
   // We'll return a mock document object mimicking the database response.
   res.json({ 
     message: 'File uploaded successfully', 
     document: {
       id: `doc_${Date.now()}`,
-      filename: req.file.originalname,
+      filename: filename,
+      credentialType: credentialType,
     }
   });
 });

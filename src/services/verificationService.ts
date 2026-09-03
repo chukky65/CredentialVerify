@@ -20,9 +20,28 @@ import {
 } from '../types';
 import { apiClient } from './apiClient';
 
-// In-memory persistent state for the active session (for endpoints not yet fully built on backend)
-let candidatesState: Candidate[] = [];
+// Local in-memory state for rapid prototyping and offline development
+// Safely initialize from localStorage to survive page refreshes
 let casesState: VerificationCase[] = [];
+let candidatesState: Candidate[] = [];
+
+try {
+  const savedCases = localStorage.getItem('credential_verify_cases');
+  const savedCandidates = localStorage.getItem('credential_verify_candidates');
+  if (savedCases) casesState = JSON.parse(savedCases);
+  if (savedCandidates) candidatesState = JSON.parse(savedCandidates);
+} catch (e) {
+  console.warn("Failed to load mock state from localStorage");
+}
+
+const saveStateToStorage = () => {
+  try {
+    localStorage.setItem('credential_verify_cases', JSON.stringify(casesState));
+    localStorage.setItem('credential_verify_candidates', JSON.stringify(candidatesState));
+  } catch (e) {
+    console.warn("Failed to save mock state to localStorage");
+  }
+};
 let sourceChecksState: SourceCheck[] = [];
 let discrepanciesState: DiscrepancyItem[] = [];
 let auditLogsState: AuditLogEvent[] = [];
@@ -49,6 +68,7 @@ export const verificationService = {
         if (!merged.find(m => m.id === c.id)) merged.push(c);
       });
       candidatesState = merged;
+      saveStateToStorage();
     } catch (e) {
       console.warn("Backend failed to load candidates, keeping local state.");
     }
@@ -147,6 +167,7 @@ export const verificationService = {
     // Add to local state immediately so UI updates instantly
     candidatesState = [newCandidate, ...candidatesState];
     casesState = [newCase, ...casesState];
+    saveStateToStorage();
     
     return newCandidate;
   },
@@ -161,6 +182,7 @@ export const verificationService = {
         if (!merged.find(m => m.id === c.id)) merged.push(c);
       });
       casesState = merged;
+      saveStateToStorage();
     } catch (e) {
       console.warn("Backend failed to load cases, keeping local state.");
     }

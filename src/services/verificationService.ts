@@ -100,8 +100,8 @@ export const verificationService = {
     let newCandidate: Candidate;
 
     // Helper to generate mock OCR
-    const generateMockOCR = (docId: string, credType: string, candidate: any): ExtractedField[] => {
-      const fields: ExtractedField[] = [];
+    const generateMockOCR = (docId: string, credType: string, candidate: any): any[] => {
+      const fields: any[] = [];
       
       // Standard Name Field
       fields.push({
@@ -111,7 +111,9 @@ export const verificationService = {
         fieldType: 'TEXT',
         originalValue: candidate.fullName.toUpperCase(),
         normalizedValue: candidate.fullName,
-        confidenceScore: 0.95 + (Math.random() * 0.04),
+        extractionConfidence: 95 + Math.floor(Math.random() * 4), // 95-98%
+        status: 'VERIFIED',
+        sourceStatus: 'MATCHED',
         isFlagged: false,
         evidencePage: 1,
         evidenceRegion: { x: 15, y: 30, width: 40, height: 5 }
@@ -126,7 +128,9 @@ export const verificationService = {
           fieldType: 'DATE',
           originalValue: candidate.dateOfBirth,
           normalizedValue: candidate.dateOfBirth,
-          confidenceScore: 0.98,
+          extractionConfidence: 98,
+          status: 'VERIFIED',
+          sourceStatus: 'MATCHED',
           isFlagged: false,
           evidencePage: 1,
           evidenceRegion: { x: 15, y: 40, width: 20, height: 5 }
@@ -139,7 +143,9 @@ export const verificationService = {
           fieldType: 'TEXT',
           originalValue: 'BACHELOR OF SCIENCE',
           normalizedValue: 'BSc',
-          confidenceScore: 0.89,
+          extractionConfidence: 89,
+          status: 'VERIFIED',
+          sourceStatus: 'MATCHED',
           isFlagged: false,
           evidencePage: 1,
           evidenceRegion: { x: 20, y: 50, width: 30, height: 5 }

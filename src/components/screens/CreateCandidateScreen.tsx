@@ -594,29 +594,37 @@ export const CreateCandidateScreen: React.FC = () => {
                             if (!file) return;
                             
                             setIsUploading(true);
-                            apiClient.uploadDocument(file, cred.type)
-                              .then((response) => {
-                                const newFile = {
-                                  id: response.document.id || `f_${Date.now()}`,
-                                  fileName: file.name,
-                                  credentialType: cred.type,
-                                  fileSizeBytes: file.size,
-                                  uploadProgress: 100,
-                                  scanStatus: 'CLEAN' as const,
-                                  isDuplicate: false,
-                                  fileUrl: URL.createObjectURL(file), // Store local URL for preview
-                                };
-                                setUploadedFiles((prev) => [...prev, newFile]);
-                                addToast(`${cred.title} uploaded successfully.`, 'success');
-                              })
-                              .catch((err) => {
-                                console.error(err);
-                                addToast(`Failed to upload ${cred.title}.`, 'error');
-                              })
-                              .finally(() => {
-                                setIsUploading(false);
-                                e.target.value = '';
-                              });
+                            
+                            // Convert to Base64 so it survives page reloads in localStorage
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              const base64Url = reader.result as string;
+                              
+                              apiClient.uploadDocument(file, cred.type)
+                                .then((response) => {
+                                  const newFile = {
+                                    id: response.document.id || `f_${Date.now()}`,
+                                    fileName: file.name,
+                                    credentialType: cred.type,
+                                    fileSizeBytes: file.size,
+                                    uploadProgress: 100,
+                                    scanStatus: 'CLEAN' as const,
+                                    isDuplicate: false,
+                                    fileUrl: base64Url, // Store Base64 URL for persistent preview
+                                  };
+                                  setUploadedFiles((prev) => [...prev, newFile]);
+                                  addToast(`${cred.title} uploaded successfully.`, 'success');
+                                })
+                                .catch((err) => {
+                                  console.error(err);
+                                  addToast(`Failed to upload ${cred.title}.`, 'error');
+                                })
+                                .finally(() => {
+                                  setIsUploading(false);
+                                  e.target.value = '';
+                                });
+                            };
+                            reader.readAsDataURL(file);
                           }}
                         />
                         <button

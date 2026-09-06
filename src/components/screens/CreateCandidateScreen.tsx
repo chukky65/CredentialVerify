@@ -83,13 +83,14 @@ export const CreateCandidateScreen: React.FC = () => {
   ];
 
   // Dynamic requirements list based on office
-  const getRequiredCredentials = (): Array<{ type: CredentialType; title: string; required: boolean }> => {
+  const getRequiredCredentials = (): Array<{ type: CredentialType; title: string; required: boolean; allowMultiple?: boolean }> => {
     return [
-      { type: 'CITIZENSHIP', title: 'Proof of Statutory Citizenship & Civil Status', required: true },
-      { type: 'ACADEMIC_DEGREE', title: 'Accredited Higher Education Degree Certificate', required: true },
-      { type: 'FINANCIAL_DISCLOSURE', title: 'Public Integrity Asset & Liability Statement', required: true },
-      { type: 'SECURITY_CLEARANCE', title: 'National Police Non-Conviction Certificate', required: true },
-      { type: 'PROFESSIONAL_LICENSE', title: 'Professional Licensure (If applicable)', required: formData.officeContested.includes('Judge') },
+      { type: 'CITIZENSHIP', title: 'Proof of citizenship (LGA Certificate)', required: true },
+      { type: 'BIRTH_CERTIFICATE', title: 'Birth Certificate', required: true },
+      { type: 'ACADEMIC_DEGREE', title: 'Educational qualifications', required: true, allowMultiple: true },
+      { type: 'FINANCIAL_DISCLOSURE', title: 'Assets Declaration Form', required: true },
+      { type: 'NYSC_CERTIFICATE', title: 'NYSC Certificate', required: false },
+      { type: 'PARTY_NOMINATION', title: 'Party Nomination form', required: true },
     ];
   };
 
@@ -538,42 +539,51 @@ export const CreateCandidateScreen: React.FC = () => {
 
             <div className="space-y-4">
               {getRequiredCredentials().map((cred) => {
-                const uploadedFile = uploadedFiles.find((f) => f.credentialType === cred.type);
+                const matchedFiles = uploadedFiles.filter((f) => f.credentialType === cred.type);
+                const hasFiles = matchedFiles.length > 0;
 
                 return (
-                  <div key={cred.type} className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${uploadedFile ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
-                        {uploadedFile ? <CheckCircle2 className="w-4 h-4" /> : <FileText className="w-3.5 h-3.5" />}
+                  <div key={cred.type} className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${hasFiles ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                        {hasFiles ? <CheckCircle2 className="w-4 h-4" /> : <FileText className="w-3.5 h-3.5" />}
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <p className="text-sm font-bold text-[#17202A]">{cred.title}</p>
                         <p className="text-xs text-[#5B6777]">
                           {cred.required ? 'Mandatory Requirement' : 'Optional (If Applicable)'}
                         </p>
+                        
+                        {/* Render uploaded files */}
+                        {hasFiles && (
+                          <div className="mt-3 space-y-2">
+                            {matchedFiles.map(uploadedFile => (
+                              <div key={uploadedFile.id} className="flex items-center gap-3 bg-white px-3 py-2 border border-slate-200 rounded-lg max-w-sm">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-semibold text-[#17202A] truncate">{uploadedFile.fileName}</p>
+                                  <span className="flex items-center gap-1 text-[#237A57] font-semibold text-[10px]">
+                                    <ShieldCheck className="w-3 h-3" />
+                                    Clean (Scanned)
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setUploadedFiles(uploadedFiles.filter((f) => f.id !== uploadedFile.id))}
+                                  className="text-slate-400 hover:text-red-600 p-1 bg-slate-50 rounded shrink-0"
+                                  title="Remove document"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {uploadedFile ? (
-                      <div className="flex items-center gap-3 shrink-0 bg-white px-3 py-2 border border-slate-200 rounded-lg">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-[#17202A] truncate max-w-[150px]">{uploadedFile.fileName}</p>
-                          <span className="flex items-center gap-1 text-[#237A57] font-semibold text-[10px]">
-                            <ShieldCheck className="w-3 h-3" />
-                            Clean (Scanned)
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setUploadedFiles(uploadedFiles.filter((f) => f.id !== uploadedFile.id))}
-                          className="text-slate-400 hover:text-red-600 p-1 bg-slate-50 rounded"
-                          title="Remove document"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="relative shrink-0">
+                    {/* Upload Button */}
+                    {(!hasFiles || cred.allowMultiple) && (
+                      <div className="relative shrink-0 mt-2 sm:mt-0">
                         <input
                           type="file"
                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -609,12 +619,12 @@ export const CreateCandidateScreen: React.FC = () => {
                               });
                           }}
                         />
-                        <button 
-                          type="button" 
-                          className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#17324D] bg-white border border-[#17324D] hover:bg-[#17324D] hover:text-white transition-colors rounded-md shadow-xs focus:outline-none"
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#17202A] bg-white border border-slate-300 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#2F75B5] focus:ring-offset-1 pointer-events-none"
                         >
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Upload File</span>
+                          <Upload className="w-4 h-4" />
+                          {hasFiles ? 'Upload Another' : 'Upload File'}
                         </button>
                       </div>
                     )}

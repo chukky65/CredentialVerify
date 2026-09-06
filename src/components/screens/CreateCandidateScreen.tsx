@@ -89,7 +89,7 @@ export const CreateCandidateScreen: React.FC = () => {
       { type: 'BIRTH_CERTIFICATE', title: 'Birth Certificate', required: true },
       { type: 'ACADEMIC_DEGREE', title: 'Educational qualifications', required: true, allowMultiple: true },
       { type: 'FINANCIAL_DISCLOSURE', title: 'Assets Declaration Form', required: true },
-      { type: 'NYSC_CERTIFICATE', title: 'NYSC Certificate', required: false },
+      { type: 'NYSC_CERTIFICATE', title: 'NYSC Certificate', required: true },
       { type: 'PARTY_NOMINATION', title: 'Party Nomination form', required: true },
     ];
   };

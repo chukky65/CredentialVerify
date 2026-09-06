@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   AlertCircle,
   FileCheck,
+  Fingerprint,
+  Camera,
 } from 'lucide-react';
 
 export const CreateCandidateScreen: React.FC = () => {
@@ -49,9 +51,12 @@ export const CreateCandidateScreen: React.FC = () => {
     contactEmail: '',
     contactPhone: '',
     agreedToPrivacyNotice: false,
+    profilePicture: null as string | null,
+    fingerprintCaptured: false,
   });
 
   const [selectedStateForLga, setSelectedStateForLga] = useState('');
+  const [isScanningFingerprint, setIsScanningFingerprint] = useState(false);
 
   // Real Uploaded Documents State
   const [uploadedFiles, setUploadedFiles] = useState<
@@ -114,6 +119,26 @@ export const CreateCandidateScreen: React.FC = () => {
       setIsUploading(false);
       event.target.value = ''; // Reset input
     }
+  };
+
+  const handleProfilePictureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Create a mock local URL for the profile picture
+    const objectUrl = URL.createObjectURL(file);
+    setFormData(prev => ({ ...prev, profilePicture: objectUrl }));
+    addToast('Profile picture attached.', 'success');
+  };
+
+  const handleFingerprintScan = () => {
+    setIsScanningFingerprint(true);
+    // Simulate biometric capture delay
+    setTimeout(() => {
+      setIsScanningFingerprint(false);
+      setFormData(prev => ({ ...prev, fingerprintCaptured: true }));
+      addToast('Biometric fingerprint successfully captured.', 'success');
+    }, 2000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -241,6 +266,76 @@ export const CreateCandidateScreen: React.FC = () => {
               </p>
             </div>
 
+            {/* Biometric Capture Section */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-2">
+              {/* Profile Picture */}
+              <div className="flex-1 bg-[#F5F7FA] p-4 rounded-lg border border-slate-200 flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden border-2 border-white shadow-sm relative group">
+                  {formData.profilePicture ? (
+                    <img src={formData.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-400">
+                      <Camera className="w-6 h-6" />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleProfilePictureUpload}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    title="Upload Profile Picture"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <Camera className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-[#17202A]">Profile Photo</h4>
+                  <p className="text-[10px] text-[#5B6777] mt-0.5">Passport photograph with clear background</p>
+                  {formData.profilePicture && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#237A57] mt-1 bg-[#237A57]/10 px-1.5 py-0.5 rounded">
+                      <CheckCircle2 className="w-3 h-3" /> Captured
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Fingerprint */}
+              <div className="flex-1 bg-[#F5F7FA] p-4 rounded-lg border border-slate-200 flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleFingerprintScan}
+                  disabled={formData.fingerprintCaptured || isScanningFingerprint}
+                  className={`w-16 h-16 rounded-lg flex-shrink-0 flex items-center justify-center transition-all ${
+                    formData.fingerprintCaptured 
+                      ? 'bg-[#237A57]/10 text-[#237A57] border border-[#237A57]/20' 
+                      : isScanningFingerprint 
+                      ? 'bg-[#2F75B5]/10 text-[#2F75B5] border border-[#2F75B5]/20 animate-pulse'
+                      : 'bg-white text-slate-400 border border-slate-200 hover:border-[#2F75B5] hover:text-[#2F75B5] shadow-sm'
+                  }`}
+                >
+                  <Fingerprint className={`w-8 h-8 ${isScanningFingerprint ? 'animate-bounce' : ''}`} />
+                </button>
+                <div>
+                  <h4 className="text-xs font-bold text-[#17202A]">Biometric Scan</h4>
+                  <p className="text-[10px] text-[#5B6777] mt-0.5">Right thumbprint for identity verification</p>
+                  {formData.fingerprintCaptured ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#237A57] mt-1 bg-[#237A57]/10 px-1.5 py-0.5 rounded">
+                      <CheckCircle2 className="w-3 h-3" /> Verified
+                    </span>
+                  ) : isScanningFingerprint ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#2F75B5] mt-1">
+                      Scanning...
+                    </span>
+                  ) : (
+                    <span className="inline-block text-[10px] font-medium text-slate-500 mt-1">
+                      Pending Capture
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#17202A] mb-1">
@@ -306,15 +401,17 @@ export const CreateCandidateScreen: React.FC = () => {
                   onChange={(e) => {
                     const newElection = e.target.value;
                     let newJurisdiction = '';
-                    if (newElection === 'President') newJurisdiction = 'National (All States)';
+                    if (newElection === 'Presidential') newJurisdiction = 'National (All States)';
                     setFormData({ ...formData, electionName: newElection, jurisdiction: newJurisdiction });
                     setSelectedStateForLga('');
                   }}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
                 >
-                  <option value="President">President</option>
+                  <option value="Presidential">Presidential</option>
+                  <option value="Governorship">Governorship</option>
                   <option value="Senate">Senate</option>
                   <option value="House of Representative">House of Representative</option>
+                  <option value="State House of Assembly">State House of Assembly</option>
                 </select>
               </div>
 
@@ -331,78 +428,21 @@ export const CreateCandidateScreen: React.FC = () => {
                 />
               </div>
 
-              {formData.electionName === 'President' && (
+              {formData.electionName === 'Governorship' && (
                 <div>
                   <label className="block text-xs font-semibold text-[#17202A] mb-1">
-                    Jurisdiction <span className="text-red-500">*</span>
+                    Jurisdiction (State) <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.jurisdiction}
                     onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
                   >
-                    <option value="National (All States)">National (All States)</option>
+                    <option value="">Select State</option>
                     {NIGERIA_JURISDICTIONS.map(s => (
                       <option key={s.state} value={s.state}>{s.state}</option>
                     ))}
                   </select>
-                </div>
-              )}
-
-              {formData.electionName === 'Senate' && (
-                <div>
-                  <label className="block text-xs font-semibold text-[#17202A] mb-1">
-                    Senatorial District <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.jurisdiction}
-                    onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
-                  >
-                    <option value="">Select a Senatorial District</option>
-                    {NIGERIA_JURISDICTIONS.flatMap(s => s.senatorialDistricts).map(sd => (
-                      <option key={sd} value={sd}>{sd}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {formData.electionName === 'House of Representative' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#17202A] mb-1">
-                      State <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={selectedStateForLga}
-                      onChange={(e) => {
-                        setSelectedStateForLga(e.target.value);
-                        setFormData({ ...formData, jurisdiction: '' });
-                      }}
-                      className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
-                    >
-                      <option value="">Select State</option>
-                      {NIGERIA_JURISDICTIONS.map(s => (
-                        <option key={s.state} value={s.state}>{s.state}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-[#17202A] mb-1">
-                      Local Government Area <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.jurisdiction}
-                      onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
-                      disabled={!selectedStateForLga}
-                      className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5] disabled:opacity-50"
-                    >
-                      <option value="">Select LGA</option>
-                      {selectedStateForLga && NIGERIA_JURISDICTIONS.find(s => s.state === selectedStateForLga)?.lgas.map(lga => (
-                        <option key={lga} value={`${lga} LGA, ${selectedStateForLga}`}>{lga}</option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
               )}
 

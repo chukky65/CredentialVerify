@@ -296,7 +296,7 @@ export const GazetteScreen: React.FC = () => {
               <span className="px-2 py-0.5 bg-[#17324D] text-white rounded font-mono text-[10px]">
                 OFFICIAL PUBLICATION
               </span>
-              <span>STATE ELECTORAL INTEGRITY COMMISSION</span>
+              <span>INDEPENDENT NATIONAL ELECTORAL COMMISSION</span>
               <span>•</span>
               <span className="text-slate-500 font-mono">GAZETTE VOL. 84, NO. 19</span>
             </div>
@@ -306,15 +306,15 @@ export const GazetteScreen: React.FC = () => {
             </h2>
 
             <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
-              Promulgated pursuant to the <strong>Veridia Electoral Integrity Act § 28.4</strong>, the 
-              <strong> Judicial Appointments Code</strong>, and <strong>Statutory Clearance Regulations 2026</strong>. 
+              Promulgated pursuant to the <strong>Electoral Act 2022</strong>, the 
+              <strong> Constitution of the Federal Republic of Nigeria 1999 (as amended)</strong>, and <strong>INEC Guidelines and Regulations</strong>. 
               The following candidates have completed authoritative multi-source credential adjudication for the ballot.
             </p>
 
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1 font-mono">
               <div>Promulgation Date: <strong className="text-slate-800">August 28, 2026</strong></div>
               <div>•</div>
-              <div>Authority Stamp: <strong className="text-slate-800">SEIC-VERIDIA-AUTH-2026</strong></div>
+              <div>Authority Stamp: <strong className="text-slate-800">INEC-AUTH-2027</strong></div>
               <div>•</div>
               <div className="flex items-center gap-1 text-emerald-700">
                 <ShieldCheck className="w-3.5 h-3.5" />
@@ -408,10 +408,10 @@ export const GazetteScreen: React.FC = () => {
               className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
             >
               <option value="ALL">All Election Cycles</option>
-              <option value="2026 Veridia General Election">2026 Veridia General Election</option>
-              <option value="2026 Judicial Bench Appointments">2026 Judicial Bench Appointments</option>
-              <option value="2026 Provincial Assembly Elections">2026 Provincial Assembly</option>
-              <option value="2026 Municipal Local Council Elections">2026 Municipal Elections</option>
+              <option value="Presidential">Presidential</option>
+              <option value="Governorship">Governorship</option>
+              <option value="Senate">Senate</option>
+              <option value="HOA/HOR">HOA/HOR</option>
             </select>
 
             <select

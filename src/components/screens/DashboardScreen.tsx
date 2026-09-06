@@ -100,12 +100,12 @@ export const DashboardScreen: React.FC = () => {
 
   // Source connectors health summary
   const sourceConnectors = [
-    { name: 'National Degree Clearinghouse (NADC)', status: 'HEALTHY', latency: '342ms', tier: 'Tier 1' },
-    { name: 'Supreme Judicial Bar Registry API', status: 'HEALTHY', latency: '210ms', tier: 'Tier 1' },
-    { name: 'Civil Status Register (NRCS)', status: 'HEALTHY', latency: '185ms', tier: 'Tier 1' },
+    { name: 'Nigerian Universities Portal', status: 'HEALTHY', latency: '342ms', tier: 'Tier 1' },
+    { name: 'National Youth Service Corps (NYSC)', status: 'HEALTHY', latency: '210ms', tier: 'Tier 1' },
+    { name: 'National Population Commission (NPC)', status: 'HEALTHY', latency: '185ms', tier: 'Tier 1' },
+    { name: 'LGA Validation Gateway', status: 'DEGRADED', latency: '8.2s', tier: 'Tier 2' },
     { name: 'National Police Criminal Index', status: 'HEALTHY', latency: '410ms', tier: 'Tier 1' },
     { name: 'Department of Revenue Gateway', status: 'OFFLINE', latency: 'Timeout', tier: 'Tier 1' },
-    { name: 'National Archives Identity Gateway', status: 'DEGRADED', latency: '8.2s', tier: 'Tier 2' },
   ];
 
   return (
@@ -125,9 +125,9 @@ export const DashboardScreen: React.FC = () => {
             className="text-xs bg-[#F5F7FA] border border-slate-300 rounded-md px-3 py-1.5 text-[#17202A] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
           >
             <option value="ALL">All Elections (3 Active)</option>
-            <option value="2026 Pacifica National Assembly">2026 Pacifica National Assembly</option>
-            <option value="2026 Capital Territory Gubernatorial">2026 Capital Territory Gubernatorial</option>
-            <option value="2026 Western Province Judicial Council">2026 Western Province Judicial Council</option>
+            <option value="2027 General Elections">2027 General Elections</option>
+            <option value="2027 Gubernatorial Elections">2027 Gubernatorial Elections</option>
+            <option value="2027 State Assembly Elections">2027 State Assembly Elections</option>
           </select>
 
           <select

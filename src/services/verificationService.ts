@@ -25,11 +25,25 @@ import { apiClient } from './apiClient';
 let casesState: VerificationCase[] = [];
 let candidatesState: Candidate[] = [];
 
+let sourceChecksState: SourceCheck[] = [];
+let discrepanciesState: DiscrepancyItem[] = [];
+let auditLogsState: AuditLogEvent[] = [];
+let rfisState: CandidateRFI[] = [];
+
 try {
   const savedCases = localStorage.getItem('credential_verify_cases');
   const savedCandidates = localStorage.getItem('credential_verify_candidates');
+  const savedSourceChecks = localStorage.getItem('credential_verify_source_checks');
+  const savedDiscrepancies = localStorage.getItem('credential_verify_discrepancies');
+  const savedAuditLogs = localStorage.getItem('credential_verify_audit_logs');
+  const savedRfis = localStorage.getItem('credential_verify_rfis');
+
   if (savedCases) casesState = JSON.parse(savedCases);
   if (savedCandidates) candidatesState = JSON.parse(savedCandidates);
+  if (savedSourceChecks) sourceChecksState = JSON.parse(savedSourceChecks);
+  if (savedDiscrepancies) discrepanciesState = JSON.parse(savedDiscrepancies);
+  if (savedAuditLogs) auditLogsState = JSON.parse(savedAuditLogs);
+  if (savedRfis) rfisState = JSON.parse(savedRfis);
 } catch (e) {
   console.warn("Failed to load mock state from localStorage");
 }
@@ -38,13 +52,15 @@ const saveStateToStorage = () => {
   try {
     localStorage.setItem('credential_verify_cases', JSON.stringify(casesState));
     localStorage.setItem('credential_verify_candidates', JSON.stringify(candidatesState));
+    localStorage.setItem('credential_verify_source_checks', JSON.stringify(sourceChecksState));
+    localStorage.setItem('credential_verify_discrepancies', JSON.stringify(discrepanciesState));
+    localStorage.setItem('credential_verify_audit_logs', JSON.stringify(auditLogsState));
+    localStorage.setItem('credential_verify_rfis', JSON.stringify(rfisState));
   } catch (e) {
     console.warn("Failed to save mock state to localStorage");
   }
 };
-let sourceChecksState: SourceCheck[] = [];
-let discrepanciesState: DiscrepancyItem[] = [];
-let auditLogsState: AuditLogEvent[] = [];
+
 let configState: SystemConfiguration = {
   maintenanceMode: false,
   autoVerifyEnabled: true,
@@ -54,7 +70,6 @@ let configState: SystemConfiguration = {
 };
 let usersState: UserAccount[] = [];
 let statutoryRulesState: StatutoryRule[] = [];
-let rfisState: CandidateRFI[] = [];
 
 const delay = (ms: number = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -83,60 +98,114 @@ export const verificationService = {
 
   async createCandidate(candidateData: any): Promise<Candidate> {
     let newCandidate: Candidate;
+
+    // Helper to generate mock OCR
+    const generateMockOCR = (docId: string, credType: string, candidate: any): ExtractedField[] => {
+      const fields: ExtractedField[] = [];
+      
+      // Standard Name Field
+      fields.push({
+        id: `fld_${Date.now()}_name`,
+        documentId: docId,
+        fieldName: 'Full Name',
+        fieldType: 'TEXT',
+        originalValue: candidate.fullName.toUpperCase(),
+        normalizedValue: candidate.fullName,
+        confidenceScore: 0.95 + (Math.random() * 0.04),
+        isFlagged: false,
+        evidencePage: 1,
+        evidenceRegion: { x: 15, y: 30, width: 40, height: 5 }
+      });
+
+      // Type-specific fields
+      if (credType === 'BIRTH_CERTIFICATE' || credType === 'CITIZENSHIP') {
+        fields.push({
+          id: `fld_${Date.now()}_dob`,
+          documentId: docId,
+          fieldName: 'Date of Birth',
+          fieldType: 'DATE',
+          originalValue: candidate.dateOfBirth,
+          normalizedValue: candidate.dateOfBirth,
+          confidenceScore: 0.98,
+          isFlagged: false,
+          evidencePage: 1,
+          evidenceRegion: { x: 15, y: 40, width: 20, height: 5 }
+        });
+      } else if (credType === 'ACADEMIC_DEGREE') {
+        fields.push({
+          id: `fld_${Date.now()}_degree`,
+          documentId: docId,
+          fieldName: 'Degree Awarded',
+          fieldType: 'TEXT',
+          originalValue: 'BACHELOR OF SCIENCE',
+          normalizedValue: 'BSc',
+          confidenceScore: 0.89,
+          isFlagged: false,
+          evidencePage: 1,
+          evidenceRegion: { x: 20, y: 50, width: 30, height: 5 }
+        });
+      }
+
+      return fields;
+    };
+
     try {
-      // Actually call the API to persist it to Supabase
       newCandidate = await apiClient.createCandidate(candidateData);
       
-      // If the backend returns a shallow candidate without documents, 
-      // inject the locally uploaded documents so the UI works
       if (!newCandidate.documents || newCandidate.documents.length === 0) {
-        newCandidate.documents = (candidateData.uploadedDocuments || []).map((doc: any, index: number) => ({
-          id: doc.id || `doc_${Date.now()}_${index}`,
-          candidateId: newCandidate.id,
-          credentialType: doc.credentialType || 'UNKNOWN_CREDENTIAL',
-          credentialTitle: doc.credentialType?.replace(/_/g, ' ') || 'Document',
-          fileName: doc.fileName || `Document_${index + 1}.pdf`,
-          fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
-          uploadTimestamp: new Date().toISOString(),
-          mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
-          totalPages: Math.floor(Math.random() * 5) + 1,
-          status: 'CLEAN',
-          vectorDocType: 'STANDARD_CERTIFICATE',
-          fileUrl: doc.fileUrl,
-          extractedFields: [],
-          qualityWarnings: []
-        }));
+        newCandidate.documents = (candidateData.uploadedDocuments || []).map((doc: any, index: number) => {
+          const docId = doc.id || `doc_${Date.now()}_${index}`;
+          return {
+            id: docId,
+            candidateId: newCandidate.id,
+            credentialType: doc.credentialType || 'UNKNOWN_CREDENTIAL',
+            credentialTitle: doc.credentialType?.replace(/_/g, ' ') || 'Document',
+            fileName: doc.fileName || `Document_${index + 1}.pdf`,
+            fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
+            uploadTimestamp: new Date().toISOString(),
+            mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
+            totalPages: Math.floor(Math.random() * 5) + 1,
+            status: 'CLEAN',
+            vectorDocType: 'STANDARD_CERTIFICATE',
+            fileUrl: doc.fileUrl,
+            extractedFields: generateMockOCR(docId, doc.credentialType, candidateData),
+            qualityWarnings: []
+          };
+        });
       }
     } catch (error) {
-      // If backend fails, fallback to creating a mock so the UI still works
       newCandidate = {
         ...candidateData,
         id: `cand_${Date.now()}`,
         status: 'PENDING',
         completenessScore: 100,
-        documents: (candidateData.uploadedDocuments || []).map((doc: any, index: number) => ({
-          id: doc.id || `doc_${Date.now()}_${index}`,
-          candidateId: `cand_${Date.now()}`,
-          credentialType: doc.credentialType || 'UNKNOWN_CREDENTIAL',
-          credentialTitle: doc.credentialType?.replace(/_/g, ' ') || 'Document',
-          fileName: doc.fileName || `Document_${index + 1}.pdf`,
-          fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
-          uploadTimestamp: new Date().toISOString(),
-          mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
-          totalPages: Math.floor(Math.random() * 5) + 1,
-          status: 'CLEAN',
-          vectorDocType: 'STANDARD_CERTIFICATE',
-          fileUrl: doc.fileUrl, // Important for preview
-          extractedFields: [],
-          qualityWarnings: []
-        })),
+        documents: (candidateData.uploadedDocuments || []).map((doc: any, index: number) => {
+          const docId = doc.id || `doc_${Date.now()}_${index}`;
+          return {
+            id: docId,
+            candidateId: `cand_${Date.now()}`,
+            credentialType: doc.credentialType || 'UNKNOWN_CREDENTIAL',
+            credentialTitle: doc.credentialType?.replace(/_/g, ' ') || 'Document',
+            fileName: doc.fileName || `Document_${index + 1}.pdf`,
+            fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
+            uploadTimestamp: new Date().toISOString(),
+            mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
+            totalPages: Math.floor(Math.random() * 5) + 1,
+            status: 'CLEAN',
+            vectorDocType: 'STANDARD_CERTIFICATE',
+            fileUrl: doc.fileUrl,
+            extractedFields: generateMockOCR(docId, doc.credentialType, candidateData),
+            qualityWarnings: []
+          };
+        }),
         cases: []
       } as Candidate;
     }
     
-    // Also locally mock the case so it appears instantly in the UI
+    // Mock the case
+    const caseId = `case_${Date.now()}`;
     const newCase: VerificationCase = {
-      id: `case_${Date.now()}`,
+      id: caseId,
       caseReference: `CASE-2026-${candidateData.referenceCode.split('-').pop()}-IN`,
       candidateId: newCandidate.id,
       candidateName: newCandidate.fullName,
@@ -152,9 +221,9 @@ export const verificationService = {
       slaDeadline: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
       ageHours: 1,
       reasonForReview: 'New candidate intake. Automated extraction pending verification.',
-      documentsCount: candidateData.documentIds ? candidateData.documentIds.length : 0,
-      claimsCount: 0,
-      sourceChecksCount: 0,
+      documentsCount: newCandidate.documents.length,
+      claimsCount: newCandidate.documents.reduce((acc, doc) => acc + doc.extractedFields.length, 0),
+      sourceChecksCount: newCandidate.documents.length,
       discrepanciesCount: 0,
       openItemsCount: 1,
       recommendation: undefined,
@@ -164,7 +233,28 @@ export const verificationService = {
       rfis: []
     };
 
-    // Add to local state immediately so UI updates instantly
+    // Generate mock source checks based on documents
+    newCandidate.documents.forEach((doc, idx) => {
+      let authName = 'Generic Verification Authority';
+      if (doc.credentialType === 'ACADEMIC_DEGREE') authName = 'Nigerian Universities Portal';
+      if (doc.credentialType === 'BIRTH_CERTIFICATE') authName = 'National Population Commission (NPC)';
+      if (doc.credentialType === 'NYSC_CERTIFICATE') authName = 'National Youth Service Corps (NYSC)';
+      if (doc.credentialType === 'CITIZENSHIP') authName = 'LGA Validation Gateway';
+
+      const mockCheck: SourceCheck = {
+        id: `sc_${Date.now()}_${idx}`,
+        caseId: caseId,
+        credentialType: doc.credentialType,
+        authorityName: authName,
+        connectorStatus: 'HEALTHY',
+        resultStatus: 'VERIFIED',
+        checkedTimestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
+        responseTimeMs: Math.floor(Math.random() * 400) + 100,
+        responsePayloadSummary: `Automated query to ${authName} returned 200 OK. Records match.`
+      };
+      sourceChecksState.unshift(mockCheck);
+    });
+
     candidatesState = [newCandidate, ...candidatesState];
     casesState = [newCase, ...casesState];
     saveStateToStorage();

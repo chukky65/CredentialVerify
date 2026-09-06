@@ -114,7 +114,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         break;
       default:
         title = 'CredentialVerify Platform';
-        subtitle = 'Electoral Commission Verification System';
+        subtitle = 'INEC Nigeria Verification System';
         break;
     }
   }

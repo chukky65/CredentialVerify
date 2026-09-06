@@ -156,8 +156,8 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       {/* Brand Header */}
       <div className="p-5 flex items-center justify-between border-b border-white/10 bg-[#12283E]">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center shrink-0 shadow-sm">
-            <div className="w-4 h-4 border-2 border-[#17324D] rotate-45" />
+          <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 shadow-sm bg-white overflow-hidden">
+            <img src="/favicon.png" alt="Logo" className="w-full h-full object-contain p-0.5" />
           </div>
           {(!isSidebarCollapsed || mobileOpen) && (
             <div className="truncate">
@@ -165,7 +165,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                 CredentialVerify
               </span>
               <span className="text-[10px] uppercase font-semibold text-white/50 tracking-widest block">
-                Electoral Commission
+                INEC NIGERIA
               </span>
             </div>
           )}

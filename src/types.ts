@@ -103,7 +103,7 @@ export interface SubmittedDocument {
   extractedFields: ExtractedField[];
   qualityWarnings: QualityWarning[];
   status: VerificationStatus;
-  vectorDocType: 'DEGREE' | 'BAR_LICENSE' | 'CITIZENSHIP_CERT' | 'TAX_DISCLOSURE' | 'SECURITY_CLEARANCE';
+  vectorDocType: 'DEGREE' | 'BAR_LICENSE' | 'CITIZENSHIP_CERT' | 'TAX_DISCLOSURE' | 'SECURITY_CLEARANCE' | 'STANDARD_CERTIFICATE' | 'BIRTH_CERT' | 'NYSC_CERT' | 'NOMINATION_FORM';
 }
 
 export type SourceReliabilityTier = 

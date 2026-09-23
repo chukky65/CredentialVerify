@@ -78,9 +78,26 @@ export const verificationService = {
   async getCandidates(): Promise<Candidate[]> {
     try {
       const candidates = await apiClient.getCandidates();
+      // Merge backend candidates with local state, but ALWAYS preserve local documents
+      // because the backend API returns shallow objects without documents
       const merged = [...candidatesState];
-      candidates.forEach(c => {
-        if (!merged.find(m => m.id === c.id)) merged.push(c);
+      candidates.forEach(backendCandidate => {
+        const localIndex = merged.findIndex(m => m.id === backendCandidate.id);
+        if (localIndex === -1) {
+          // Brand new from backend, add it
+          merged.push(backendCandidate);
+        } else {
+          // Already exists locally - keep local version to preserve documents, cases etc.
+          // Only update top-level status fields from backend
+          merged[localIndex] = {
+            ...merged[localIndex],
+            status: backendCandidate.status ?? merged[localIndex].status,
+            // Preserve local documents - never overwrite with empty backend array
+            documents: (merged[localIndex].documents && merged[localIndex].documents.length > 0)
+              ? merged[localIndex].documents
+              : (backendCandidate.documents || []),
+          };
+        }
       });
       candidatesState = merged;
       saveStateToStorage();
@@ -180,27 +197,37 @@ export const verificationService = {
         });
       }
     } catch (error) {
+      const fallbackId = `cand_${Date.now()}`;
       newCandidate = {
         ...candidateData,
-        id: `cand_${Date.now()}`,
+        id: fallbackId,
         status: 'PENDING',
         completenessScore: 100,
         documents: (candidateData.uploadedDocuments || []).map((doc: any, index: number) => {
           const docId = doc.id || `doc_${Date.now()}_${index}`;
+          const credType = doc.credentialType || 'UNKNOWN_CREDENTIAL';
+          const vectorType = 
+            credType === 'ACADEMIC_DEGREE' ? 'DEGREE' :
+            credType === 'CITIZENSHIP' ? 'CITIZENSHIP_CERT' :
+            credType === 'BIRTH_CERTIFICATE' ? 'BIRTH_CERT' :
+            credType === 'NYSC_CERTIFICATE' ? 'NYSC_CERT' :
+            credType === 'FINANCIAL_DISCLOSURE' ? 'TAX_DISCLOSURE' :
+            credType === 'PARTY_NOMINATION' ? 'NOMINATION_FORM' :
+            'STANDARD_CERTIFICATE';
           return {
             id: docId,
-            candidateId: `cand_${Date.now()}`,
-            credentialType: doc.credentialType || 'UNKNOWN_CREDENTIAL',
-            credentialTitle: doc.credentialType?.replace(/_/g, ' ') || 'Document',
+            candidateId: fallbackId,
+            credentialType: credType,
+            credentialTitle: credType.replace(/_/g, ' '),
             fileName: doc.fileName || `Document_${index + 1}.pdf`,
             fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
             uploadTimestamp: new Date().toISOString(),
             mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
             totalPages: Math.floor(Math.random() * 5) + 1,
             status: 'CLEAN',
-            vectorDocType: 'STANDARD_CERTIFICATE',
+            vectorDocType: vectorType,
             fileUrl: doc.fileUrl,
-            extractedFields: generateMockOCR(docId, doc.credentialType, candidateData),
+            extractedFields: generateMockOCR(docId, credType, candidateData),
             qualityWarnings: []
           };
         }),

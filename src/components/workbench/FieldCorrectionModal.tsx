@@ -70,7 +70,7 @@ export const FieldCorrectionModal: React.FC<FieldCorrectionModalProps> = ({
         <div className="p-3 bg-[#F5F7FA] rounded-lg border border-slate-200 text-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span className="font-semibold">Original Automated Value:</span>
-            <span className="font-tabular text-[11px]">Confidence: {field.extractionConfidence}%</span>
+            <span className="font-tabular text-[11px]">Confidence: {field.extractionConfidence == null ? 'Not scored' : field.extractionConfidence + '%'}</span>
           </div>
           <p className="font-mono font-bold text-[#17202A] text-sm bg-white p-2 rounded border border-slate-200">
             {field.originalValue}

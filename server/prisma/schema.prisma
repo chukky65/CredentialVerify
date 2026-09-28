@@ -45,9 +45,11 @@ model SubmittedDocument {
   totalPages          Int
   status              String
   vectorDocType       String
+  extractionMetadata  Json?
   
   extractedFields     ExtractedField[]
   qualityWarnings     QualityWarning[]
+  originals           DocumentOriginal[]
 }
 
 model ExtractedField {
@@ -236,4 +238,39 @@ model StatutoryRule {
   createdBy       String
   createdAt       DateTime @default(now())
   is_demo         Boolean  @default(false)
+}
+
+model StaffAccount {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  staffId      String   @unique
+  role         String
+  passwordHash String
+  active       Boolean  @default(true)
+}
+
+model DocumentOriginal {
+  id          String   @id @default(uuid())
+  documentId  String
+  document    SubmittedDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy  String
+  mimeType    String
+  size        Int
+  sha256      String
+  chunkCount  Int
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  chunks      DocumentOriginalChunk[]
+  @@index([documentId, completedAt])
+}
+
+model DocumentOriginalChunk {
+  originalId String
+  original   DocumentOriginal @relation(fields: [originalId], references: [id], onDelete: Cascade)
+  index      Int
+  encrypted  Bytes
+  iv         Bytes
+  tag        Bytes
+  @@id([originalId, index])
 }

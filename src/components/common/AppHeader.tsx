@@ -375,7 +375,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <button
             type="button"
             id="sign-out-btn"
-            onClick={() => navigateTo('signin')}
+            onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('credential_verify_user'); window.location.assign('/sign-in'); }}
             className="p-1.5 text-slate-400 hover:text-[#B83232] rounded hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[#2F75B5]"
             title="Sign Out"
             aria-label="Sign out"
@@ -387,3 +387,4 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     </header>
   );
 };
+

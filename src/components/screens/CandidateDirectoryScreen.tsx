@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { electionOptions } from '../../services/electionScope';
 import { useApp } from '../../context/AppContext';
 import { StatusBadge } from '../common/StatusBadge';
 import { ExportDialog } from '../common/ExportDialog';
@@ -134,9 +135,7 @@ export const CandidateDirectoryScreen: React.FC = () => {
               className="w-full text-xs bg-[#F5F7FA] border border-slate-300 rounded-md px-3 py-1.5 text-[#17202A] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
             >
               <option value="ALL">All Elections</option>
-              <option value="2026 Pacifica National Assembly">2026 Pacifica National Assembly</option>
-              <option value="2026 Capital Territory Gubernatorial">2026 Capital Territory Gubernatorial</option>
-              <option value="2026 Western Province Judicial Council">2026 Western Province Judicial Council</option>
+              {electionOptions(candidates).map(name => <option key={name} value={name}>{name}</option>)}
             </select>
           </div>
 

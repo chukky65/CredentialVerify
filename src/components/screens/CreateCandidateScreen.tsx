@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { verificationService } from '../../services/verificationService';
-import { apiClient } from '../../services/apiClient';
+import { ingestDocument } from '../../services/documentExtraction';
+import { assessAge } from '../../../server/src/ageValidation';
 import { CredentialType, SubmittedDocument } from '../../types';
+import { ELECTIONS, isValidElectionOffice } from '../../../server/src/elections';
 import { NIGERIA_JURISDICTIONS } from '../../data/jurisdictions';
 import {
   CheckCircle2,
@@ -44,8 +46,8 @@ export const CreateCandidateScreen: React.FC = () => {
     fullName: '',
     otherNames: '',
     dateOfBirth: '',
-    electionId: 'elec_2026_nat',
-    electionName: 'President',
+    electionId: ELECTIONS[0].id,
+    electionName: ELECTIONS[0].name,
     officeContested: 'President',
     jurisdiction: 'National (All States)',
     contactEmail: '',
@@ -55,21 +57,12 @@ export const CreateCandidateScreen: React.FC = () => {
     fingerprintCaptured: false,
   });
 
-  const [selectedStateForLga, setSelectedStateForLga] = useState('');
   const [isScanningFingerprint, setIsScanningFingerprint] = useState(false);
 
   // Real Uploaded Documents State
-  const [uploadedFiles, setUploadedFiles] = useState<
-    Array<{
-      id: string;
-      fileName: string;
-      credentialType: CredentialType;
-      fileSizeBytes: number;
-      uploadProgress: number;
-      scanStatus: 'CLEAN' | 'SCANNING' | 'MALWARE_DETECTED';
-      isDuplicate: boolean;
-    }>
-  >([]);
+  const [uploadedFiles, setUploadedFiles] = useState<SubmittedDocument[]>([]);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const ageAssessment = assessAge(formData.dateOfBirth, formData.officeContested);
 
   const [isUploading, setIsUploading] = useState(false);
 
@@ -78,7 +71,7 @@ export const CreateCandidateScreen: React.FC = () => {
   const steps = [
     { number: 1, title: 'Candidate Information', desc: 'Identity & Office' },
     { number: 2, title: 'Credential Checklist', desc: 'Statutory Prerequisites' },
-    { number: 3, title: 'Document Intake & Scan', desc: 'Upload & Validation' },
+    { number: 3, title: 'Document Intake & Extraction', desc: 'Upload & Validation' },
     { number: 4, title: 'Review & Verification Consent', desc: 'Statutory Attestation' },
   ];
 
@@ -90,36 +83,22 @@ export const CreateCandidateScreen: React.FC = () => {
       { type: 'ACADEMIC_DEGREE', title: 'Educational qualifications', required: true, allowMultiple: true },
       { type: 'FINANCIAL_DISCLOSURE', title: 'Assets Declaration Form', required: true },
       { type: 'NYSC_CERTIFICATE', title: 'NYSC Certificate', required: true },
+      { type: 'WAEC_CERTIFICATE', title: 'WAEC Certificate', required: false, allowMultiple: true },
       { type: 'PARTY_NOMINATION', title: 'Party Nomination form', required: true },
     ];
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: CredentialType) => {
     const file = event.target.files?.[0];
+    const input = event.target;
     if (!file) return;
-
-    setIsUploading(true);
+    setIsUploading(true); setUploadProgress('Saving original document?');
     try {
-      const response = await apiClient.uploadDocument(file, 'GENERAL_DOCUMENT');
-      
-      const newFile = {
-        id: response.document.id || `f_${Date.now()}`,
-        fileName: file.name,
-        credentialType: 'FINANCIAL_DISCLOSURE' as CredentialType, // Automatically mapping for now
-        fileSizeBytes: file.size,
-        uploadProgress: 100,
-        scanStatus: 'CLEAN' as const,
-        isDuplicate: false,
-      };
-      setUploadedFiles((prev) => [...prev, newFile]);
-      addToast('Document uploaded successfully. Automated integrity & malware scan passed.', 'success');
-    } catch (err) {
-      console.error(err);
-      addToast('Document upload failed.', 'error');
-    } finally {
-      setIsUploading(false);
-      event.target.value = ''; // Reset input
-    }
+      const doc = await ingestDocument(file, type, setUploadProgress);
+      setUploadedFiles(prev => [...prev, doc]);
+      addToast(doc.extractionStatus === 'COMPLETE' ? 'Document text extracted. Claims require review.' : 'Original saved; extraction needs attention in the workbench.', doc.extractionStatus === 'COMPLETE' ? 'success' : 'warning');
+    } catch (error) { addToast(error instanceof Error ? error.message : 'Document upload failed.', 'error'); }
+    finally { setIsUploading(false); setUploadProgress(''); input.value = ''; }
   };
 
   const handleProfilePictureUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -149,11 +128,18 @@ export const CreateCandidateScreen: React.FC = () => {
       setCurrentStep(1);
       return;
     }
+    if (!isValidElectionOffice(formData) || !formData.jurisdiction.trim()) {
+      addToast('Select an election, its contested office, and a jurisdiction.', 'warning');
+      setCurrentStep(1);
+      return;
+    }
     if (!formData.agreedToPrivacyNotice) {
       addToast('Please confirm the statutory data processing acknowledgement.', 'warning');
       return;
     }
 
+    if (ageAssessment.invalid) { addToast(ageAssessment.flags[0], 'warning'); setCurrentStep(1); return; }
+    if (isUploading) { addToast('Wait for document extraction to finish.', 'info'); return; }
     setIsSubmitting(true);
 
     try {
@@ -171,7 +157,7 @@ export const CreateCandidateScreen: React.FC = () => {
         jurisdiction: formData.jurisdiction,
         contactEmail: formData.contactEmail || 'intake@elections.state.gov',
         contactPhone: formData.contactPhone || '+1 (555) 000-0000',
-        submissionDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        submissionDate: new Date().toISOString(),
         assignedReviewerId: 'usr_analyst_01',
         assignedReviewerName: 'Elena Vance',
         documentIds: docsToSubmit,
@@ -386,6 +372,7 @@ export const CreateCandidateScreen: React.FC = () => {
                 </label>
                 <input
                   type="date"
+                  max={new Date().toISOString().slice(0, 10)}
                   value={formData.dateOfBirth}
                   onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
                   className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
@@ -393,26 +380,21 @@ export const CreateCandidateScreen: React.FC = () => {
                 />
               </div>
 
+              {formData.dateOfBirth && ageAssessment.flags.length > 0 && <div role="alert" className="sm:col-span-2 p-3 bg-amber-50 border border-amber-300 rounded text-xs text-amber-900">{ageAssessment.flags.map(flag => <p key={flag}>{flag}</p>)}</div>}
               <div>
                 <label className="block text-xs font-semibold text-[#17202A] mb-1">
                   Target Election <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.electionName}
+                  value={formData.electionId}
                   onChange={(e) => {
-                    const newElection = e.target.value;
-                    let newJurisdiction = '';
-                    if (newElection === 'Presidential') newJurisdiction = 'National (All States)';
-                    setFormData({ ...formData, electionName: newElection, jurisdiction: newJurisdiction });
-                    setSelectedStateForLga('');
+                    const election = ELECTIONS.find(item => item.id === e.target.value)!;
+                    const office = election.offices[0];
+                    setFormData({ ...formData, electionId: election.id, electionName: election.name, officeContested: office, jurisdiction: office === 'President' ? 'National (All States)' : '' });
                   }}
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md"
                 >
-                  <option value="Presidential">Presidential</option>
-                  <option value="Governorship">Governorship</option>
-                  <option value="Senate">Senate</option>
-                  <option value="House of Representative">House of Representative</option>
-                  <option value="State House of Assembly">State House of Assembly</option>
+                  {ELECTIONS.map(election => <option key={election.id} value={election.id}>{election.name}</option>)}
                 </select>
               </div>
 
@@ -420,32 +402,27 @@ export const CreateCandidateScreen: React.FC = () => {
                 <label className="block text-xs font-semibold text-[#17202A] mb-1">
                   Office Contested <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.officeContested}
-                  onChange={(e) => setFormData({ ...formData, officeContested: e.target.value })}
-                  placeholder="e.g. Member of Parliament - Constituency 4"
-                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
-                />
+                  onChange={(e) => {
+                    setFormData({ ...formData, officeContested: e.target.value, jurisdiction: e.target.value === 'President' ? 'National (All States)' : '' });
+                  }}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md"
+                >
+                  {ELECTIONS.find(e => e.id === formData.electionId)!.offices.map(office => <option key={office} value={office}>{office}</option>)}
+                </select>
               </div>
 
-              {formData.electionName === 'Governorship' && (
-                <div>
-                  <label className="block text-xs font-semibold text-[#17202A] mb-1">
-                    Jurisdiction (State) <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.jurisdiction}
-                    onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md text-[#17202A] focus:border-[#2F75B5] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
-                  >
-                    <option value="">Select State</option>
-                    {NIGERIA_JURISDICTIONS.map(s => (
-                      <option key={s.state} value={s.state}>{s.state}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-semibold text-[#17202A] mb-1">Jurisdiction <span className="text-red-500">*</span></label>
+                <select value={formData.jurisdiction} onChange={e => setFormData({ ...formData, jurisdiction: e.target.value })} className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md" required>
+                  <option value="">Select Jurisdiction</option>
+                  {formData.officeContested === 'President' ? <option value="National (All States)">National (All States)</option> :
+                    formData.officeContested === 'Senator' ? NIGERIA_JURISDICTIONS.map(s => <optgroup key={s.state} label={s.state}>{s.senatorialDistricts.map(d => <option key={d} value={d}>{d}</option>)}</optgroup>) :
+                    NIGERIA_JURISDICTIONS.map(s => <option key={s.state} value={s.state}>{s.state}</option>)}
+                </select>
+                {(formData.officeContested === 'House of Representatives Member' || formData.officeContested === 'State House of Assembly Member') && <p className="text-[10px] text-slate-500 mt-1">State-level reporting scope; constituency registration is not yet configured.</p>}
+              </div>
 
 
               <div>
@@ -533,10 +510,11 @@ export const CreateCandidateScreen: React.FC = () => {
             <div className="border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-[#17202A]">Step 3: Document Intake & Validation</h3>
               <p className="text-xs text-[#5B6777]">
-                Upload official certified copies for each required credential. Supported formats: PDF, TIFF, JPEG (Max 25MB per file).
+                Upload official certified copies for each required credential. Supported formats: PDF, JPEG and PNG (Max 25MB per file). Originals are cached during intake and uploaded to the server when the candidate is saved.
               </p>
             </div>
 
+            {isUploading && <p role="status" className="text-sm text-blue-800">{uploadProgress}</p>}
             <div className="space-y-4">
               {getRequiredCredentials().map((cred) => {
                 const matchedFiles = uploadedFiles.filter((f) => f.credentialType === cred.type);
@@ -561,9 +539,11 @@ export const CreateCandidateScreen: React.FC = () => {
                               <div key={uploadedFile.id} className="flex items-center gap-3 bg-white px-3 py-2 border border-slate-200 rounded-lg max-w-sm">
                                 <div className="min-w-0 flex-1">
                                   <p className="text-xs font-semibold text-[#17202A] truncate">{uploadedFile.fileName}</p>
+                                  {uploadedFile.extractionError && <p className="text-xs text-amber-800">{uploadedFile.extractionError}</p>}
+                                  {uploadedFile.qualityWarnings.map((warning, index) => <p key={index} className="text-xs text-amber-800">{warning.message}</p>)}
                                   <span className="flex items-center gap-1 text-[#237A57] font-semibold text-[10px]">
                                     <ShieldCheck className="w-3 h-3" />
-                                    Clean (Scanned)
+                                    {uploadedFile.extractionStatus === 'COMPLETE' ? 'Extracted; needs review' : 'Extraction needs attention'}
                                   </span>
                                 </div>
                                 <button
@@ -589,43 +569,8 @@ export const CreateCandidateScreen: React.FC = () => {
                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                           title={`Upload ${cred.title}`}
                           disabled={isUploading}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            
-                            setIsUploading(true);
-                            
-                            // Convert to Base64 so it survives page reloads in localStorage
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              const base64Url = reader.result as string;
-                              
-                              apiClient.uploadDocument(file, cred.type)
-                                .then((response) => {
-                                  const newFile = {
-                                    id: response.document.id || `f_${Date.now()}`,
-                                    fileName: file.name,
-                                    credentialType: cred.type,
-                                    fileSizeBytes: file.size,
-                                    uploadProgress: 100,
-                                    scanStatus: 'CLEAN' as const,
-                                    isDuplicate: false,
-                                    fileUrl: base64Url, // Store Base64 URL for persistent preview
-                                  };
-                                  setUploadedFiles((prev) => [...prev, newFile]);
-                                  addToast(`${cred.title} uploaded successfully.`, 'success');
-                                })
-                                .catch((err) => {
-                                  console.error(err);
-                                  addToast(`Failed to upload ${cred.title}.`, 'error');
-                                })
-                                .finally(() => {
-                                  setIsUploading(false);
-                                  e.target.value = '';
-                                });
-                            };
-                            reader.readAsDataURL(file);
-                          }}
+                          accept="application/pdf,image/jpeg,image/png"
+                          onChange={e => handleFileUpload(e, cred.type)}
                         />
                         <button
                           type="button"
@@ -643,7 +588,7 @@ export const CreateCandidateScreen: React.FC = () => {
             
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 flex items-start gap-2">
               <ShieldAlert className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-              <p>All uploaded files are subjected to automated malware scans, page count verification, and cryptographic hash duplicate checks upon ingestion.</p>
+              <p>Text is extracted for review. Check the case storage status before clearing browser data. OCR is not a malware scan or a registry verification.</p>
             </div>
           </div>
         )}
@@ -695,7 +640,7 @@ export const CreateCandidateScreen: React.FC = () => {
                 <div className="space-y-1">
                   <p className="font-bold text-[#17202A]">Statutory Privacy & Data Protection Notice</p>
                   <p className="text-[#5B6777] leading-relaxed">
-                    Submitted credential records are processed solely for determining compliance with constitutional and electoral statutory criteria. All extracted claims are cross-checked against authorized government databases under strict data retention policies.
+                    Submitted credential records are processed solely for determining compliance with constitutional and electoral statutory criteria. Registry checks require configured connections and authorized access, subject to strict data retention policies.
                   </p>
                 </div>
               </div>
@@ -752,3 +697,4 @@ export const CreateCandidateScreen: React.FC = () => {
     </div>
   );
 };
+

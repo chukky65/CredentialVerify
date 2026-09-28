@@ -5,14 +5,14 @@ import { Send, Scale, Clock, AlertCircle, Plus, Trash2, ShieldCheck, FileText } 
 
 interface IssueRFIModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: () => void | Promise<void>;
   caseId: string;
   caseReference: string;
   candidateId: string;
   candidateName: string;
   initialDiscrepancyRef?: string;
   initialCredentialType?: CredentialType;
-  onIssued: (rfi: Omit<CandidateRFI, 'id' | 'rfiNumber' | 'issuedTimestamp' | 'status'>) => void;
+  onIssued: (rfi: Omit<CandidateRFI, 'id' | 'rfiNumber' | 'issuedTimestamp' | 'status'>) => void | Promise<void>;
 }
 
 const CREDENTIAL_OPTIONS: { type: CredentialType; label: string }[] = [
@@ -70,7 +70,9 @@ export const IssueRFIModal: React.FC<IssueRFIModalProps> = ({
     setCuringRequirements(curingRequirements.filter((_, i) => i !== idx));
   };
 
-  const handleConfirm = () => {
+  const [isSaving, setIsSaving] = useState(false);
+  const handleConfirm = async () => {
+    if (isSaving) return;
     if (!subject.trim()) {
       setError('Please provide a subject line for the formal notice.');
       return;
@@ -84,7 +86,8 @@ export const IssueRFIModal: React.FC<IssueRFIModalProps> = ({
       return;
     }
 
-    onIssued({
+    setIsSaving(true);
+    try { await onIssued({
       caseId,
       caseReference,
       candidateId,
@@ -101,6 +104,8 @@ export const IssueRFIModal: React.FC<IssueRFIModalProps> = ({
     });
 
     onClose();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to save request.'); }
+    finally { setIsSaving(false); }
   };
 
   return (
@@ -108,6 +113,7 @@ export const IssueRFIModal: React.FC<IssueRFIModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       onConfirm={handleConfirm}
+      isProcessing={isSaving}
       title="Issue Formal Statutory Clarification (RFI)"
       description={`Dispatches an official Request for Information under statutory deadline rules to candidate ${candidateName}.`}
       confirmLabel="Issue Formal Notice"

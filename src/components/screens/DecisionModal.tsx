@@ -11,7 +11,7 @@ interface DecisionModalProps {
   candidateName: string;
   confirmedClaimsCount: number;
   contradictedClaimsCount: number;
-  onRecord: (record: RecommendationRecord) => void;
+  onRecord: (record: RecommendationRecord) => void | Promise<void>;
 }
 
 export const DecisionModal: React.FC<DecisionModalProps> = ({
@@ -34,7 +34,9 @@ export const DecisionModal: React.FC<DecisionModalProps> = ({
   const [rationale, setRationale] = useState<string>('');
   const [confirmedStatutoryDisclaimer, setConfirmedStatutoryDisclaimer] = useState<boolean>(false);
 
-  const handleSubmit = () => {
+  const [isSaving, setIsSaving] = useState(false);
+  const handleSubmit = async () => {
+    if (isSaving) return;
     if (!rationale.trim()) {
       addToast('Please enter structured decision rationale.', 'warning');
       return;
@@ -56,8 +58,10 @@ export const DecisionModal: React.FC<DecisionModalProps> = ({
       isFinalAdverseDecision: false,
     };
 
-    onRecord(newRecord);
-    onClose();
+    setIsSaving(true);
+    try { await onRecord(newRecord); onClose(); }
+    catch (e) { addToast(e instanceof Error ? e.message : 'Unable to save recommendation.', 'error'); }
+    finally { setIsSaving(false); }
   };
 
   return (
@@ -65,6 +69,7 @@ export const DecisionModal: React.FC<DecisionModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       onConfirm={handleSubmit}
+      isProcessing={isSaving}
       title="Record Credential Verification Recommendation"
       description={`Record official evidence findings for ${candidateName} (${caseReference}).`}
       confirmLabel="Submit Recommendation to Case Ledger"

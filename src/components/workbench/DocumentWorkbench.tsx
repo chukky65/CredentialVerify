@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { ReviewWarnings } from '../common/ReviewWarnings';
 import { useApp } from '../../context/AppContext';
 import { DocumentRenderer } from './DocumentRenderer';
 import { FieldCorrectionModal } from './FieldCorrectionModal';
@@ -51,14 +53,15 @@ export const DocumentWorkbench: React.FC = () => {
     currentUser,
   } = useApp();
 
+  const params = useParams();
   // Active case and candidate
-  const currentCase = cases.find((c) => c.id === activeCaseId) || cases[0];
-  const candidate = candidates.find((cand) => cand.id === currentCase?.candidateId) || candidates[0];
+  const currentCase = params.caseId ? cases.find(c => c.id === params.caseId) : cases.find(c => c.id === activeCaseId) || cases[0];
+  const candidate = candidates.find((cand) => cand.id === currentCase?.candidateId);
 
   // Active document
   const activeDoc =
-    candidate?.documents.find((d) => d.id === activeDocumentId) ||
-    candidate?.documents[0] ||
+    candidate?.documents?.find((d) => d.id === activeDocumentId) ||
+    candidate?.documents?.[0] ||
     null;
 
   // Viewer state
@@ -80,6 +83,21 @@ export const DocumentWorkbench: React.FC = () => {
   const [isIssueRFIModalOpen, setIsIssueRFIModalOpen] = useState<boolean>(false);
   const [filterFieldStatus, setFilterFieldStatus] = useState<string>('ALL');
   const [mobileTab, setMobileTab] = useState<'packet' | 'viewer' | 'fields'>('viewer');
+
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState('');
+  useEffect(() => { if (params.documentId) setActiveDocumentId(params.documentId); }, [params.documentId]);
+  useEffect(() => { setCurrentPage(1); setSelectedFieldId(null); setRotation(0); }, [activeDoc?.id]);
+  const handleExtract = async () => {
+    if (!candidate || !activeDoc || isExtracting) return;
+    setIsExtracting(true); setExtractionProgress('Opening original document?');
+    try {
+      const result = await verificationService.extractDocumentClaims(candidate.id, activeDoc.id, setExtractionProgress);
+      await refreshData();
+      addToast(result.extractionStatus === 'COMPLETE' ? 'Document evidence extracted; review each claim.' : result.extractionError || 'Extraction failed.', result.extractionStatus === 'COMPLETE' ? 'success' : 'warning');
+    } catch (e) { addToast(e instanceof Error ? e.message : 'Extraction failed.', 'error'); }
+    finally { setIsExtracting(false); setExtractionProgress(''); }
+  };
 
   // Zoom controls
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 15, 180));
@@ -109,14 +127,15 @@ export const DocumentWorkbench: React.FC = () => {
       originalValue: data.extractedValue,
       normalizedValue: data.extractedValue,
       isCorrected: false,
-      extractionConfidence: 94,
-      status: 'VERIFIED',
+      extractionConfidence: null,
+      extractionMethod: 'MANUAL',
+      status: 'NEEDS_REVIEW',
       evidencePage: currentPage,
       evidenceRegion: {
         ...newDrawnRegion,
         label: data.evidenceLabel,
       },
-      sourceStatus: 'MATCHED',
+      sourceStatus: 'PENDING',
     };
 
     const created = await verificationService.addExtractedField(
@@ -241,6 +260,25 @@ export const DocumentWorkbench: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-8.5rem)] lg:h-[calc(100vh-8.5rem)] space-y-3">
+      <ReviewWarnings candidate={candidate} syncPending={currentCase.syncPending} />
+      <div className="p-3 bg-white border border-slate-200 rounded-lg text-xs shrink-0 flex flex-wrap items-center gap-3">
+        <span>{activeDoc.originalStorageStatus === 'SYNCED' ? 'Original saved on server' : 'Original not yet saved on server'}</span>
+        <button type="button" className="px-3 py-2 border rounded" onClick={async () => {
+          try { await verificationService.syncCandidateOriginals(candidate.id); addToast('Original files saved on the server.', 'success'); }
+          catch (error) { addToast(error instanceof Error ? error.message : 'Upload could not complete', 'warning'); }
+          await refreshData();
+        }}>Sync originals to server</button>
+        <button type="button" onClick={handleExtract} disabled={isExtracting} className="px-3 py-2 rounded bg-[#17324D] text-white disabled:opacity-50">{isExtracting ? 'Extracting?' : activeDoc.extractionStatus === 'COMPLETE' ? 'Re-extract document' : 'Extract document'}</button>
+        <label className="cursor-pointer text-blue-800 underline">Reattach original
+          <input type="file" accept="application/pdf,image/jpeg,image/png" disabled={isExtracting} className="sr-only" onChange={async e => {
+            const file = e.target.files?.[0]; e.target.value = '';
+            if (!file) return;
+            try { await verificationService.reattachDocument(candidate.id, activeDoc.id, file); setCurrentPage(1); await refreshData(); addToast('Original reattached. Run extraction to read its contents.', 'info'); }
+            catch (err) { addToast(err instanceof Error ? err.message : 'Could not save original.', 'error'); }
+          }} />
+        </label>
+        <span role="status">{isExtracting ? extractionProgress : activeDoc.extractionStatus === 'COMPLETE' ? 'Extracted from the document; source verification is separate.' : activeDoc.extractionError || 'Run extraction to read the original file.'}</span>
+      </div>
       {/* Workbench Header Bar */}
       <div className="bg-white p-3 sm:px-4 sm:py-2.5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
@@ -568,6 +606,7 @@ export const DocumentWorkbench: React.FC = () => {
 
           {/* Fields List */}
           <div className="p-3 space-y-3 overflow-y-auto flex-1">
+            {filteredFields.length === 0 && <p className="text-xs text-slate-600">No extracted claims to display. Use Extract document; unreadable files can be annotated manually.</p>}
             {filteredFields.map((field) => {
               const isSelected = selectedFieldId === field.id;
               const isCustom = field.id.startsWith('fld_custom');
@@ -575,7 +614,7 @@ export const DocumentWorkbench: React.FC = () => {
               return (
                 <div
                   key={field.id}
-                  onClick={() => setSelectedFieldId(field.id)}
+                  onClick={() => { setSelectedFieldId(field.id); setCurrentPage(field.evidencePage); }}
                   className={`p-3 rounded-lg border transition-all cursor-pointer space-y-2.5 ${
                     isSelected
                       ? 'border-[#2F75B5] ring-2 ring-[#2F75B5]/20 bg-blue-50/30 shadow-xs'
@@ -601,7 +640,7 @@ export const DocumentWorkbench: React.FC = () => {
                   </div>
 
                   {/* Confidence Bar */}
-                  <ConfidenceIndicator score={field.extractionConfidence} />
+                  <ConfidenceIndicator confidence={field.extractionConfidence} />
 
                   {/* Field Values (Original vs Corrected) */}
                   <div className="space-y-1.5 text-xs">

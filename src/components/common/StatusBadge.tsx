@@ -62,6 +62,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
           border: 'border-[#B83232]/30',
           icon: <XCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
         };
+      case 'NOT_CONFIGURED':
+        return { label: 'Not configured', bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-300', icon: <WifiOff className="w-3.5 h-3.5" /> };
       case 'PENDING':
         return {
           label: 'Pending',

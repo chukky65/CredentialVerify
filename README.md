@@ -37,7 +37,7 @@ A secure, institutional web application engineered for authorized electoral comm
 6. **Case Overview (`/case-overview`)**: Comprehensive candidate verification file containing credential checklists and review timelines.
 7. **Document Review Workbench (`/workbench`)**: Three-panel inspection suite featuring vector document rendering, evidence bounding boxes, zoom/pan controls, and field correction modals.
 8. **Discrepancy Review (`/discrepancies`)**: Side-by-side reconciliation between candidate claims and authoritative government registers.
-9. **Authoritative Source Checks (`/source-checks`)**: Real-time telemetry, latency indicators, and manual test pings for government API connectors (NADC, Bar, NRCS, Police, Tax).
+9. **Authoritative Source Checks (`/source-checks`)**: Real-time telemetry, latency indicators, and manual test pings for government API connectors (NUC, NPC, NIMC, INEC, NYSC, WAEC; connections not yet configured).
 10. **Operational Reports (`/reports`)**: SLA turnaround charts, OCR accuracy statistics, and human correction rates.
 11. **Audit Trail & Cryptographic Ledger (`/audit-trail`)**: Immutable chronological transaction logs with SHA-256 hashes and statutory reason codes.
 12. **System Configuration (`/configuration`)**: Parameter controls for SLA thresholds, confidence limits, and default PII masking.

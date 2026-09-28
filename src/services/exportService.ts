@@ -131,7 +131,7 @@ function generateCsvString(
   };
 
   const headerLines = [
-    `# ELECTORAL COMMISSION OF VERIDIA - STATUTORY AUDIT LEDGER`,
+    `# INDEPENDENT NATIONAL ELECTORAL COMMISSION (INEC) - STATUTORY AUDIT LEDGER`,
     `# Export Generated: ${dateStamp}`,
     `# Authorized Requestor: ${user.name} (${user.staffId}) - Role: ${user.role}`,
     `# Classification: OFFICIAL AUDIT RECORD - IMMUTABLE SHA-256 LEDGER`,
@@ -256,7 +256,7 @@ function generatePdfHtmlString(
 
   <div style="border-bottom: 2px solid #17324D; padding-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start;">
     <div>
-      <h1 style="margin: 0; font-size: 18px; color: #17324D; text-transform: uppercase;">Electoral Commission of Veridia</h1>
+      <h1 style="margin: 0; font-size: 18px; color: #17324D; text-transform: uppercase;">Independent National Electoral Commission (INEC)</h1>
       <h2 style="margin: 4px 0 0 0; font-size: 13px; color: #475569; font-weight: 500;">Statutory Candidate Credential Verification Audit Ledger (Section 44 Compliance)</h2>
     </div>
     <div style="text-align: right; font-family: monospace; font-size: 11px; color: #64748B;">

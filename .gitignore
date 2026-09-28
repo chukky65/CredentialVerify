@@ -2,6 +2,10 @@ node_modules/
 build/
 dist/
 coverage/
+public/ocr/
+public/pdf-assets/
+test-results/
+playwright-report/
 .DS_Store
 *.log
 .env*

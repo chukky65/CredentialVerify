@@ -18,6 +18,12 @@ import {
   CandidateRFI,
   RFIStatus,
 } from '../types';
+import { normalizeElection, isValidElectionOffice } from '../../server/src/elections';
+import { reconcileCases } from './reconcileCases';
+import { assessAge } from '../../server/src/ageValidation';
+import { candidateReviewFlags } from './candidateReview';
+import { hasBlockingExtraction } from './extractionQuality';
+import { SOURCE_CONNECTORS } from '../data/sourceConnectors';
 import { apiClient } from './apiClient';
 
 // Local in-memory state for rapid prototyping and offline development
@@ -48,7 +54,36 @@ try {
   console.warn("Failed to load mock state from localStorage");
 }
 
+const repairStoredRecords = () => {
+  candidatesState = candidatesState.map(c => {
+    const documents = (c.documents || []).map(doc => {
+      const generated = !doc.extractionVersion && doc.extractedFields?.some(f => !f.fieldKey && /^fld_\d+_(name|dob|degree)$/.test(f.id));
+      return generated ? { ...doc, extractedFields: doc.extractedFields.filter(f => !!f.fieldKey), extractionStatus: 'NEEDS_REEXTRACTION' as const, status: 'NEEDS_REVIEW' as const } : doc;
+    });
+    return normalizeElection({ ...c, documents });
+  });
+  const result = reconcileCases(casesState, casesState.filter(c => !c.id.startsWith('case_')));
+  casesState = result.cases.map(c => {
+    const candidate = candidatesState.find(candidate => candidate.id === c.candidateId);
+    return normalizeElection(candidate ? { ...c, electionName: candidate.electionName, officeContested: candidate.officeContested, jurisdiction: candidate.jurisdiction } : c);
+  });
+  const relink = <T extends { caseId: string }>(record: T): T => ({ ...record, caseId: result.aliases.get(record.caseId) || record.caseId });
+  sourceChecksState = sourceChecksState.map(relink);
+  sourceChecksState = sourceChecksState.map(check => /^sc_\d+_\d+$/.test(check.id) && !check.evidenceReference ? {
+    ...check, resultStatus: 'UNAVAILABLE', connectorStatus: 'OFFLINE', responseTimeMs: 0,
+    responsePayloadSummary: 'Legacy simulated check. No authoritative registry evidence is recorded.',
+  } : check);
+  discrepanciesState = discrepanciesState.map(relink);
+  rfisState = rfisState.map(relink);
+};
+repairStoredRecords();
+
 const saveStateToStorage = () => {
+  // Directory status and dashboard status must describe the same review state.
+  candidatesState = candidatesState.map(candidate => {
+    const linked = casesState.find(item => item.candidateId === candidate.id);
+    return linked ? { ...candidate, status: linked.workflowStatus } : candidate;
+  });
   try {
     localStorage.setItem('credential_verify_cases', JSON.stringify(casesState));
     localStorage.setItem('credential_verify_candidates', JSON.stringify(candidatesState));
@@ -73,7 +108,81 @@ let statutoryRulesState: StatutoryRule[] = [];
 
 const delay = (ms: number = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function persistCaseReview(item: VerificationCase) {
+  item.syncPending = true;
+  saveStateToStorage();
+  if (item.id.startsWith('case_')) return; // browser-only case
+  try {
+    const candidate = candidatesState.find(c => c.id === item.candidateId);
+    await apiClient.saveCaseReview(item.id, {
+      workflowStatus: item.workflowStatus, stage: item.stage, recommendation: item.recommendation,
+      reasonForReview: item.reasonForReview,
+      rfis: rfisState.filter(r => r.caseId === item.id),
+      documents: candidate?.documents.map(({ fileUrl, ...doc }) => doc) || [],
+    });
+    if (candidate) {
+      const { syncOriginal } = await import('./documentStore');
+      for (const doc of candidate.documents) await syncOriginal(doc);
+    }
+    item.syncPending = false;
+    saveStateToStorage();
+  } catch { saveStateToStorage(); /* local change stays durable and retries on refresh */ }
+}
+async function persistReviewForCandidate(candidateId: string) {
+  const candidate = candidatesState.find(c => c.id === candidateId);
+  const item = casesState.find(c => c.candidateId === candidateId);
+  if (item && candidate) {
+    item.claimsCount = candidate.documents.reduce((n, doc) => n + doc.extractedFields.length, 0);
+    item.documentsCount = candidate.documents.length;
+    await persistCaseReview(item);
+  } else saveStateToStorage();
+}
+
 export const verificationService = {
+  async syncCandidateOriginals(candidateId: string) {
+    const item = casesState.find(c => c.candidateId === candidateId);
+    if (!item || item.id.startsWith('case_')) throw new Error('This candidate has not been saved to the backend. Sign in and register the candidate on the server first.');
+    await persistReviewForCandidate(candidateId);
+    const candidate = candidatesState.find(c => c.id === candidateId);
+    if (item.syncPending || candidate?.documents.some(doc => doc.originalStorageStatus !== 'SYNCED')) throw new Error(candidate?.documents.find(doc => doc.originalStorageError)?.originalStorageError || 'Originals are not fully saved on the server. Check your connection and reattach any missing original.');
+  },
+  async extractDocumentClaims(candidateId: string, documentId: string, progress?: (message: string) => void) {
+    const candidate = candidatesState.find(c => c.id === candidateId);
+    const index = candidate?.documents.findIndex(d => d.id === documentId) ?? -1;
+    if (!candidate || index < 0) throw new Error('Document not found');
+    const { extractDocument } = await import('./documentExtraction');
+    const previous = candidate.documents[index];
+    const result = await extractDocument(previous, progress);
+    if (result.extractionStatus === 'COMPLETE') {
+      // Preserve analyst edits while replacing automated output on an explicit retry.
+      result.extractedFields = [...result.extractedFields, ...previous.extractedFields.filter(f => f.extractionMethod === 'MANUAL' || f.isCorrected).map(f => ({ ...f, id: f.id + '_retained' }))];
+      delete result.fileUrl; // original has been migrated to IndexedDB
+    } else {
+      result.extractedFields = previous.extractedFields.filter(f => f.extractionMethod === 'MANUAL');
+    }
+    candidate.documents[index] = result;
+    const item = casesState.find(c => c.candidateId === candidateId);
+    if (item && (item.workflowStatus === 'PENDING' || item.workflowStatus === 'VERIFIED')) {
+      item.workflowStatus = 'NEEDS_REVIEW'; item.stage = 'ANALYSIS'; item.recommendation = undefined;
+    }
+    await persistReviewForCandidate(candidateId);
+    return result;
+  },
+  async reattachDocument(candidateId: string, documentId: string, file: File) {
+    if (!['application/pdf', 'image/png', 'image/jpeg'].includes(file.type) || file.size > 25_000_000 || !file.size) throw new Error('Choose a PDF, JPEG or PNG no larger than 25 MB.');
+    const candidate = candidatesState.find(c => c.id === candidateId);
+    const doc = candidate?.documents.find(d => d.id === documentId);
+    if (!doc) throw new Error('Document not found');
+    const { storeOriginal } = await import('./documentStore');
+    await storeOriginal(doc.id, file);
+    doc.fileName = file.name; doc.mimeType = file.type; doc.fileSizeBytes = file.size;
+    doc.uploadTimestamp = new Date().toISOString(); doc.fileUrl = undefined;
+    doc.originalStorageStatus = 'LOCAL_ONLY'; doc.originalStorageError = undefined;
+    doc.extractionStatus = 'NEEDS_REEXTRACTION'; doc.extractedFields = []; doc.rawText = undefined;
+    const item = casesState.find(c => c.candidateId === candidateId);
+    if (item) { item.workflowStatus = 'NEEDS_REVIEW'; item.stage = 'ANALYSIS'; item.recommendation = undefined; }
+    await persistReviewForCandidate(candidateId);
+  },
   // Candidate Queries & Mutations
   async getCandidates(): Promise<Candidate[]> {
     try {
@@ -99,12 +208,13 @@ export const verificationService = {
           };
         }
       });
-      candidatesState = merged;
+      candidatesState = merged.map(normalizeElection);
+      repairStoredRecords();
       saveStateToStorage();
     } catch (e) {
       console.warn("Backend failed to load candidates, keeping local state.");
     }
-    return candidatesState;
+    return [...candidatesState];
   },
 
   async getCandidateById(id: string): Promise<Candidate | null> {
@@ -114,129 +224,30 @@ export const verificationService = {
   },
 
   async createCandidate(candidateData: any): Promise<Candidate> {
-    let newCandidate: Candidate;
+    candidateData = normalizeElection(candidateData);
+    if (!isValidElectionOffice(candidateData)) throw new Error('Invalid election and contested office combination');
+    let newCandidate: Candidate & { cases?: VerificationCase[] };
 
-    // Helper to generate mock OCR
-    const generateMockOCR = (docId: string, credType: string, candidate: any): any[] => {
-      const fields: any[] = [];
-      
-      // Standard Name Field
-      fields.push({
-        id: `fld_${Date.now()}_name`,
-        documentId: docId,
-        fieldName: 'Full Name',
-        fieldType: 'TEXT',
-        originalValue: candidate.fullName.toUpperCase(),
-        normalizedValue: candidate.fullName,
-        extractionConfidence: 95 + Math.floor(Math.random() * 4), // 95-98%
-        status: 'VERIFIED',
-        sourceStatus: 'MATCHED',
-        isFlagged: false,
-        evidencePage: 1,
-        evidenceRegion: { x: 15, y: 30, width: 40, height: 5 }
-      });
-
-      // Type-specific fields
-      if (credType === 'BIRTH_CERTIFICATE' || credType === 'CITIZENSHIP') {
-        fields.push({
-          id: `fld_${Date.now()}_dob`,
-          documentId: docId,
-          fieldName: 'Date of Birth',
-          fieldType: 'DATE',
-          originalValue: candidate.dateOfBirth,
-          normalizedValue: candidate.dateOfBirth,
-          extractionConfidence: 98,
-          status: 'VERIFIED',
-          sourceStatus: 'MATCHED',
-          isFlagged: false,
-          evidencePage: 1,
-          evidenceRegion: { x: 15, y: 40, width: 20, height: 5 }
-        });
-      } else if (credType === 'ACADEMIC_DEGREE') {
-        fields.push({
-          id: `fld_${Date.now()}_degree`,
-          documentId: docId,
-          fieldName: 'Degree Awarded',
-          fieldType: 'TEXT',
-          originalValue: 'BACHELOR OF SCIENCE',
-          normalizedValue: 'BSc',
-          extractionConfidence: 89,
-          status: 'VERIFIED',
-          sourceStatus: 'MATCHED',
-          isFlagged: false,
-          evidencePage: 1,
-          evidenceRegion: { x: 20, y: 50, width: 30, height: 5 }
-        });
-      }
-
-      return fields;
-    };
-
+    const age = assessAge(candidateData.dateOfBirth, candidateData.officeContested);
+    if (age.invalid) throw new Error(age.flags[0]);
+    const documents: SubmittedDocument[] = (candidateData.uploadedDocuments || []).map((doc: SubmittedDocument) => ({
+      ...doc, extractedFields: doc.extractedFields || [], qualityWarnings: doc.qualityWarnings || [],
+      extractionStatus: doc.extractionStatus || 'PENDING', status: 'NEEDS_REVIEW',
+    }));
     try {
       newCandidate = await apiClient.createCandidate(candidateData);
-      
-      if (!newCandidate.documents || newCandidate.documents.length === 0) {
-        newCandidate.documents = (candidateData.uploadedDocuments || []).map((doc: any, index: number) => {
-          const docId = doc.id || `doc_${Date.now()}_${index}`;
-          return {
-            id: docId,
-            candidateId: newCandidate.id,
-            credentialType: doc.credentialType || 'UNKNOWN_CREDENTIAL',
-            credentialTitle: doc.credentialType?.replace(/_/g, ' ') || 'Document',
-            fileName: doc.fileName || `Document_${index + 1}.pdf`,
-            fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
-            uploadTimestamp: new Date().toISOString(),
-            mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
-            totalPages: Math.floor(Math.random() * 5) + 1,
-            status: 'CLEAN',
-            vectorDocType: 'STANDARD_CERTIFICATE',
-            fileUrl: doc.fileUrl,
-            extractedFields: generateMockOCR(docId, doc.credentialType, candidateData),
-            qualityWarnings: []
-          };
-        });
-      }
-    } catch (error) {
-      const fallbackId = `cand_${Date.now()}`;
-      newCandidate = {
-        ...candidateData,
-        id: fallbackId,
-        status: 'PENDING',
-        completenessScore: 100,
-        documents: (candidateData.uploadedDocuments || []).map((doc: any, index: number) => {
-          const docId = doc.id || `doc_${Date.now()}_${index}`;
-          const credType = doc.credentialType || 'UNKNOWN_CREDENTIAL';
-          const vectorType = 
-            credType === 'ACADEMIC_DEGREE' ? 'DEGREE' :
-            credType === 'CITIZENSHIP' ? 'CITIZENSHIP_CERT' :
-            credType === 'BIRTH_CERTIFICATE' ? 'BIRTH_CERT' :
-            credType === 'NYSC_CERTIFICATE' ? 'NYSC_CERT' :
-            credType === 'FINANCIAL_DISCLOSURE' ? 'TAX_DISCLOSURE' :
-            credType === 'PARTY_NOMINATION' ? 'NOMINATION_FORM' :
-            'STANDARD_CERTIFICATE';
-          return {
-            id: docId,
-            candidateId: fallbackId,
-            credentialType: credType,
-            credentialTitle: credType.replace(/_/g, ' '),
-            fileName: doc.fileName || `Document_${index + 1}.pdf`,
-            fileSizeBytes: doc.fileSizeBytes || 1024 * 1024 * 2.5,
-            uploadTimestamp: new Date().toISOString(),
-            mimeType: doc.fileUrl ? 'image/png' : 'application/pdf',
-            totalPages: Math.floor(Math.random() * 5) + 1,
-            status: 'CLEAN',
-            vectorDocType: vectorType,
-            fileUrl: doc.fileUrl,
-            extractedFields: generateMockOCR(docId, credType, candidateData),
-            qualityWarnings: []
-          };
-        }),
-        cases: []
-      } as Candidate;
+    } catch {
+      newCandidate = { ...candidateData, id: 'cand_' + crypto.randomUUID(), status: 'PENDING',
+        completenessScore: 0, lastUpdated: new Date().toISOString(), documents: [] };
     }
-    
-    // Mock the case
-    const caseId = `case_${Date.now()}`;
+    newCandidate.documents = documents.map(doc => ({ ...doc, candidateId: newCandidate.id }));
+    const reviewFlags = candidateReviewFlags(newCandidate);
+    const intakeStatus = documents.length || reviewFlags.length ? 'NEEDS_REVIEW' : 'PENDING';
+    newCandidate.status = intakeStatus;
+
+    // Reuse the server case identity; create one local case only when offline.
+    const serverCase = newCandidate.cases?.[0];
+    const caseId = serverCase?.id || `case_${crypto.randomUUID()}`;
     const newCase: VerificationCase = {
       id: caseId,
       caseReference: `CASE-2026-${candidateData.referenceCode.split('-').pop()}-IN`,
@@ -245,17 +256,14 @@ export const verificationService = {
       electionName: newCandidate.electionName,
       officeContested: newCandidate.officeContested,
       jurisdiction: newCandidate.jurisdiction,
-      workflowStatus: 'PENDING',
-      stage: 'INTAKE',
+
       priority: 'STANDARD',
       assignedReviewerId: newCandidate.assignedReviewerId,
       assignedReviewerName: newCandidate.assignedReviewerName,
       submissionDate: newCandidate.submissionDate || new Date().toISOString(),
-      slaDeadline: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
+      slaDeadline: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
       ageHours: 1,
-      reasonForReview: 'New candidate intake. Automated extraction pending verification.',
       documentsCount: newCandidate.documents.length,
-      claimsCount: newCandidate.documents.reduce((acc, doc) => acc + doc.extractedFields.length, 0),
       sourceChecksCount: newCandidate.documents.length,
       discrepanciesCount: 0,
       openItemsCount: 1,
@@ -263,27 +271,36 @@ export const verificationService = {
       is_demo: true,
       sourceChecks: [],
       discrepancies: [],
-      rfis: []
-    };
+      rfis: [],
+      ...serverCase,
+      workflowStatus: intakeStatus,
+      stage: documents.length ? 'ANALYSIS' : 'INTAKE',
+      reasonForReview: reviewFlags.join(' ') || (documents.length ? 'Document extraction complete or awaiting attention. Analyst review required.' : 'Awaiting document intake.'),
+      claimsCount: documents.reduce((count, doc) => count + doc.extractedFields.length, 0),
+    } as VerificationCase;
 
-    // Generate mock source checks based on documents
+    // Unconfigured registry connections cannot verify uploaded documents.
     newCandidate.documents.forEach((doc, idx) => {
       let authName = 'Generic Verification Authority';
-      if (doc.credentialType === 'ACADEMIC_DEGREE') authName = 'Nigerian Universities Portal';
-      if (doc.credentialType === 'BIRTH_CERTIFICATE') authName = 'National Population Commission (NPC)';
+      if (doc.credentialType === 'ACADEMIC_DEGREE') authName = SOURCE_CONNECTORS.find(s => s.acronym === 'NUC')!.name;
+      if (doc.credentialType === 'BIRTH_CERTIFICATE') authName = SOURCE_CONNECTORS.find(s => s.acronym === 'NPC')!.name;
       if (doc.credentialType === 'NYSC_CERTIFICATE') authName = 'National Youth Service Corps (NYSC)';
-      if (doc.credentialType === 'CITIZENSHIP') authName = 'LGA Validation Gateway';
+      if (doc.credentialType === 'WAEC_CERTIFICATE') authName = SOURCE_CONNECTORS.find(s => s.acronym === 'WAEC')!.name;
+      if (doc.credentialType === 'CITIZENSHIP') authName = SOURCE_CONNECTORS.find(s => s.acronym === 'NIMC')!.name;
+      if (doc.credentialType === 'PARTY_NOMINATION') authName = SOURCE_CONNECTORS.find(s => s.acronym === 'INEC')!.name;
 
       const mockCheck: SourceCheck = {
         id: `sc_${Date.now()}_${idx}`,
         caseId: caseId,
         credentialType: doc.credentialType,
         authorityName: authName,
-        connectorStatus: 'HEALTHY',
-        resultStatus: 'VERIFIED',
+        connectorStatus: 'OFFLINE',
+        resultStatus: 'UNAVAILABLE',
+        reliabilityTier: 'TIER_1_STATUTORY_AUTHORITY',
+        evidenceReference: '',
         checkedTimestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-        responseTimeMs: Math.floor(Math.random() * 400) + 100,
-        responsePayloadSummary: `Automated query to ${authName} returned 200 OK. Records match.`
+        responseTimeMs: 0,
+        responsePayloadSummary: 'Source connection is not configured. No authoritative verification has been performed.'
       };
       sourceChecksState.unshift(mockCheck);
     });
@@ -291,25 +308,35 @@ export const verificationService = {
     candidatesState = [newCandidate, ...candidatesState];
     casesState = [newCase, ...casesState];
     saveStateToStorage();
+    if (serverCase) await persistCaseReview(newCase);
     
     return newCandidate;
   },
 
   // Case & Queue Queries
   async getCases(): Promise<VerificationCase[]> {
+    for (const item of casesState.filter(c => c.syncPending)) await persistCaseReview(item);
     try {
       const cases = await apiClient.getCases();
       // Merge backend cases with local mock cases to ensure UI doesn't lose data
       const merged = [...casesState];
       cases.forEach(c => {
-        if (!merged.find(m => m.id === c.id)) merged.push(c);
+        const receivedRfis = (c as VerificationCase & { rfis?: CandidateRFI[] }).rfis;
+        if (receivedRfis && !casesState.find(local => local.id === c.id)?.syncPending) {
+          rfisState = [...rfisState.filter(rfi => rfi.caseId !== c.id), ...receivedRfis];
+        }
+        const index = merged.findIndex(m => m.id === c.id);
+        if (index < 0) merged.push(c);
+        else if (merged[index].syncPending === false) merged[index] = { ...merged[index], ...c, syncPending: false };
       });
       casesState = merged;
+      repairStoredRecords();
       saveStateToStorage();
     } catch (e) {
       console.warn("Backend failed to load cases, keeping local state.");
     }
-    return casesState;
+    repairStoredRecords();
+    return [...casesState];
   },
 
   async getCaseById(caseId: string): Promise<VerificationCase | null> {
@@ -360,6 +387,7 @@ export const verificationService = {
       });
     }
 
+    await persistReviewForCandidate(candidateId);
     return updatedField;
   },
 
@@ -400,6 +428,7 @@ export const verificationService = {
       severity: 'INFO',
     });
 
+    await persistReviewForCandidate(candidateId);
     return field;
   },
 
@@ -437,6 +466,7 @@ export const verificationService = {
       severity: 'INFO',
     });
 
+    await persistReviewForCandidate(candidateId);
     return true;
   },
 
@@ -454,14 +484,14 @@ export const verificationService = {
     const index = sourceChecksState.findIndex((s) => s.id === sourceId);
     if (index === -1) return null;
 
-    // Simulate recovery to healthy verified state
+    // No configured source adapter is available; retries cannot assert a match.
     const updated: SourceCheck = {
       ...sourceChecksState[index],
       checkedTimestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-      resultStatus: 'VERIFIED',
-      connectorStatus: 'HEALTHY',
-      responseTimeMs: Math.floor(Math.random() * 200) + 150,
-      responsePayloadSummary: 'Manual retry query completed. Authoritative registry verified active match.',
+      resultStatus: 'UNAVAILABLE',
+      connectorStatus: 'OFFLINE',
+      responseTimeMs: 0,
+      responsePayloadSummary: 'Source connection is not configured. No query was sent.',
     };
     sourceChecksState[index] = updated;
 
@@ -472,13 +502,18 @@ export const verificationService = {
       actorName: 'Elena Vance',
       actorRole: 'VERIFICATION_ANALYST',
       eventType: 'SOURCE_QUERY_RETRY',
-      summary: `Manual retry succeeded for connector [${updated.authorityName}]`,
-      newValue: 'Status: VERIFIED (200 OK)',
+      summary: `Manual retry unavailable for connector [${updated.authorityName}]`,
+      newValue: 'Status: UNAVAILABLE (connection not configured)',
       reason: 'Analyst initiated manual source connection ping.',
       technicalHash: `sha256:${Math.random().toString(36).substring(2)}`,
       severity: 'INFO',
     });
 
+    saveStateToStorage();
+    if ('caseId' in updated) {
+      const linkedCase = casesState.find(c => c.id === updated.caseId);
+      if (linkedCase) await persistCaseReview(linkedCase);
+    }
     return updated;
   },
 
@@ -534,6 +569,10 @@ export const verificationService = {
     const caseItem = casesState.find((c) => c.id === caseId);
     if (!caseItem) return null;
 
+    if (recommendation.recommendationType === 'REQUIREMENTS_SATISFIED') {
+      const candidate = candidatesState.find(c => c.id === caseItem.candidateId);
+      if (!candidate?.documents.length || candidate.documents.some(hasBlockingExtraction)) throw new Error('Resolve missing, failed or uncertain extracted evidence before recording requirements satisfied.');
+    }
     caseItem.recommendation = recommendation;
     if (recommendation.recommendationType === 'REQUIREMENTS_SATISFIED') {
       caseItem.workflowStatus = 'VERIFIED';
@@ -562,6 +601,7 @@ export const verificationService = {
       severity: 'INFO',
     });
 
+    await persistCaseReview(caseItem);
     return { ...caseItem };
   },
 
@@ -647,6 +687,11 @@ export const verificationService = {
       severity: 'INFO',
     });
 
+    saveStateToStorage();
+    if ('caseId' in updated) {
+      const linkedCase = casesState.find(c => c.id === updated.caseId);
+      if (linkedCase) await persistCaseReview(linkedCase);
+    }
     return updated;
   },
 
@@ -734,6 +779,8 @@ export const verificationService = {
       severity: 'INFO',
     });
 
+    const linkedCase = casesState.find(c => c.id === newRFI.caseId);
+    if (linkedCase) { linkedCase.stage = 'DISCREPANCY_REVIEW'; await persistCaseReview(linkedCase); }
     return newRFI;
   },
 
@@ -786,6 +833,11 @@ export const verificationService = {
       severity: 'INFO',
     });
 
+    saveStateToStorage();
+    if ('caseId' in updated) {
+      const linkedCase = casesState.find(c => c.id === updated.caseId);
+      if (linkedCase) await persistCaseReview(linkedCase);
+    }
     return updated;
   },
 
@@ -820,7 +872,8 @@ export const verificationService = {
     if (outcome === 'DEFECT_CURED') {
       const caseIndex = casesState.findIndex((c) => c.id === current.caseId);
       if (caseIndex !== -1) {
-        casesState[caseIndex].workflowStatus = 'NEEDS_REVIEW';
+        const awaitingResponse = rfisState.some(r => r.caseId === current.caseId && ['ISSUED', 'ACKNOWLEDGED', 'EXPIRED'].includes(r.status));
+        casesState[caseIndex].workflowStatus = awaitingResponse ? 'INFO_REQUIRED' : 'NEEDS_REVIEW';
         if (casesState[caseIndex].discrepanciesCount > 0) {
           casesState[caseIndex].discrepanciesCount = Math.max(0, casesState[caseIndex].discrepanciesCount - 1);
         }
@@ -843,6 +896,11 @@ export const verificationService = {
       severity: outcome === 'DEFECT_CURED' ? 'AUDIT' : 'WARNING',
     });
 
+    saveStateToStorage();
+    if ('caseId' in updated) {
+      const linkedCase = casesState.find(c => c.id === updated.caseId);
+      if (linkedCase) await persistCaseReview(linkedCase);
+    }
     return updated;
   },
 };

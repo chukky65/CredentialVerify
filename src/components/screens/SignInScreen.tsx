@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiClient } from '../../services/apiClient';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
 import {
@@ -22,8 +23,8 @@ const USERS = [
 
 export const SignInScreen: React.FC = () => {
   const { setCurrentUser, navigateTo, addToast } = useApp();
-  const [emailOrStaffId, setEmailOrStaffId] = useState('e.vance@elections.state.gov');
-  const [password, setPassword] = useState('••••••••••••');
+  const [emailOrStaffId, setEmailOrStaffId] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -37,23 +38,16 @@ export const SignInScreen: React.FC = () => {
     }
 
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setIsLoading(false);
-
-    // Find matched user or default to Analyst
-    const matchedUser =
-      USERS.find(
-        (u) =>
-          u.email.toLowerCase() === emailOrStaffId.toLowerCase() ||
-          u.staffId.toLowerCase() === emailOrStaffId.toLowerCase()
-      ) || USERS[0];
-
-    setCurrentUser(matchedUser);
-    addToast(`Signed in successfully as ${matchedUser.name} (${matchedUser.role.replace('_', ' ')})`, 'success');
-    navigateTo('dashboard');
+    try {
+      const user = await apiClient.signIn(emailOrStaffId, password);
+      setCurrentUser(user);
+      addToast(`Signed in as ${user.name}`, 'success');
+      navigateTo('dashboard');
+    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Sign-in failed'); }
+    finally { setIsLoading(false); }
   };
-
   const handleQuickPersona = (role: UserRole) => {
+    localStorage.removeItem('token'); localStorage.removeItem('credential_verify_user');
     const user = USERS.find((u) => u.role === role) || USERS[0];
     setEmailOrStaffId(user.email);
     setCurrentUser(user as any);

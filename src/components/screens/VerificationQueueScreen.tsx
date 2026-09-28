@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { scopeRecords } from '../../services/electionScope';
+import { isSlaApproaching } from '../../services/dashboardMetrics';
 import { useApp } from '../../context/AppContext';
 import { StatusBadge } from '../common/StatusBadge';
 import { ConfirmationModal } from '../common/ConfirmationModal';
@@ -18,9 +21,11 @@ import {
 } from 'lucide-react';
 
 export const VerificationQueueScreen: React.FC = () => {
-  const { cases, currentUser, navigateTo, setActiveCaseId, setActiveCandidateId, addToast } = useApp();
+  const { cases: allCases, candidates, currentUser, navigateTo, setActiveCaseId, setActiveCandidateId, addToast } = useApp();
 
-  const [activeTab, setActiveTab] = useState<string>('ALL');
+  const [params] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<string>(params.get('status') || 'ALL');
+  const cases = scopeRecords(candidates, allCases, params.get('election') || 'ALL', params.get('jurisdiction') || 'ALL').cases;
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
@@ -30,7 +35,11 @@ export const VerificationQueueScreen: React.FC = () => {
   // Filter cases
   const filteredCases = cases.filter((c) => {
     // Tab filter
-    if (activeTab === 'ASSIGNED_TO_ME') {
+    if (activeTab === 'PENDING') {
+      if (c.workflowStatus !== 'PENDING') return false;
+    } else if (activeTab === 'SLA') {
+      if (!isSlaApproaching(c)) return false;
+    } else if (activeTab === 'ASSIGNED_TO_ME') {
       if (c.assignedReviewerName !== currentUser.name) return false;
     } else if (activeTab === 'NEEDS_REVIEW') {
       if (c.workflowStatus !== 'NEEDS_REVIEW') return false;
@@ -84,6 +93,8 @@ export const VerificationQueueScreen: React.FC = () => {
 
   const tabs = [
     { id: 'ALL', label: 'All Cases', count: cases.length },
+    { id: 'PENDING', label: 'Pending Analysis', count: cases.filter(c => c.workflowStatus === 'PENDING').length },
+    { id: 'SLA', label: 'Approaching / Overdue SLA', count: cases.filter(c => isSlaApproaching(c)).length },
     { id: 'ASSIGNED_TO_ME', label: 'Assigned to Me', count: cases.filter((c) => c.assignedReviewerName === currentUser.name).length },
     { id: 'NEEDS_REVIEW', label: 'Needs Review', count: cases.filter((c) => c.workflowStatus === 'NEEDS_REVIEW').length },
     { id: 'INFO_REQUIRED', label: 'Information Required', count: cases.filter((c) => c.workflowStatus === 'INFO_REQUIRED').length },

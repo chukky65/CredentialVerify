@@ -1,6 +1,7 @@
+/// <reference types="vite/client" />
 import { Candidate, VerificationCase } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = import.meta.env?.VITE_API_URL || '/api';
 
 /**
  * Gets the JWT token from localStorage.
@@ -14,6 +15,12 @@ const getAuthHeaders = () => {
 };
 
 export const apiClient = {
+  async saveCaseReview(caseId: string, payload: unknown): Promise<void> {
+    const response = await fetch(`${API_BASE}/cases/${encodeURIComponent(caseId)}/review`, {
+      method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('Case review has not synced to the server');
+  },
   async getCandidates(): Promise<Candidate[]> {
     const response = await fetch(`${API_BASE}/candidates`, {
       headers: { 'Authorization': getAuthHeaders().Authorization }
@@ -43,21 +50,12 @@ export const apiClient = {
     return data.data as Candidate;
   },
 
-  async uploadDocument(file: File, credentialType: string): Promise<any> {
-    // Since this is a prototype and the backend doesn't store the file, 
-    // we mock the upload completely on the frontend to avoid ANY Vercel 
-    // serverless payload limits, timeouts, or network failures.
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          message: 'File uploaded successfully',
-          document: {
-            id: `doc_${Date.now()}`,
-            filename: file.name,
-            credentialType: credentialType
-          }
-        });
-      }, 1500); // Simulate realistic 1.5s network delay
-    });
+  async signIn(email: string, password: string) {
+    const response = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Sign-in failed');
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('credential_verify_user', JSON.stringify(data.user));
+    return data.user;
   }
 };

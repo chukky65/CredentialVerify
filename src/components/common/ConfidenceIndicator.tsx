@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 
 interface ConfidenceIndicatorProps {
-  confidence: number; // 0 to 100
+  confidence: number | null; // null when no OCR confidence applies
   showLabel?: boolean;
   size?: 'sm' | 'md';
 }
@@ -13,6 +13,7 @@ export const ConfidenceIndicator: React.FC<ConfidenceIndicatorProps> = ({
   size = 'md',
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
+  if (confidence == null || !Number.isFinite(confidence)) return <span className="text-[11px] text-slate-500">No OCR score (PDF text or manual entry)</span>;
 
   // Optical color calibration for extraction reliability
   const getColor = () => {

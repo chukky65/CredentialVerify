@@ -1,4 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { ReviewWarnings } from '../common/ReviewWarnings';
+import { prerequisiteChecks } from '../../services/prerequisiteChecks';
+import { candidateReviewFlags } from '../../services/candidateReview';
+import type { SourceCheck } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { StatusBadge } from '../common/StatusBadge';
 import { MetricCard } from '../common/MetricCard';
@@ -43,6 +48,7 @@ export const CaseOverviewScreen: React.FC = () => {
     addToast,
     refreshData,
     currentUser,
+    auditEvents,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
@@ -54,12 +60,22 @@ export const CaseOverviewScreen: React.FC = () => {
   const [isIssueRFIModalOpen, setIsIssueRFIModalOpen] = useState(false);
   const [isEscalateOpen, setIsEscalateOpen] = useState(false);
 
+  const params = useParams();
   // Find active case
-  const currentCase = cases.find((c) => c.id === activeCaseId) || cases[0];
-  const candidate = candidates.find((cand) => cand.id === currentCase?.candidateId) || candidates[0];
+  const currentCase = params.caseId ? cases.find(c => c.id === params.caseId) : params.candidateId ? cases.find(c => c.candidateId === params.candidateId) : cases.find(c => c.id === activeCaseId) || cases[0];
+  const candidate = candidates.find((cand) => cand.id === currentCase?.candidateId);
+
+  const [sourceChecks, setSourceChecks] = useState<SourceCheck[]>([]);
+  useEffect(() => {
+    let active = true; setSourceChecks([]);
+    if (currentCase) verificationService.getSourceChecks(currentCase.id).then(checks => { if (active) setSourceChecks(checks); });
+    return () => { active = false; };
+  }, [currentCase?.id]);
+  const caseAudit = auditEvents.filter(e => e.caseReference === currentCase?.caseReference || e.caseReference === candidate?.referenceCode);
+  const evidenceFlags = candidate ? candidateReviewFlags(candidate) : [];
 
   const handleRecordDecision = async (record: RecommendationRecord) => {
-    if (!currentCase) return;
+    if (!currentCase || !candidate) return;
     await verificationService.recordRecommendation(currentCase.id, record);
     await refreshData();
     addToast(`Recommendation [${record.recommendationType.replace(/_/g, ' ')}] recorded for ${currentCase.caseReference}.`, 'success');
@@ -96,6 +112,7 @@ export const CaseOverviewScreen: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-16">
+      <ReviewWarnings candidate={candidate} syncPending={currentCase.syncPending} />
       {/* Case Header Card */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -200,7 +217,7 @@ export const CaseOverviewScreen: React.FC = () => {
           id="metric-docs"
           title="Documents Submitted"
           value={candidate.documents.length}
-          sublabel="All scanned clean"
+          sublabel="Original files registered"
           icon={<FileText className="w-4 h-4 text-[#17324D]" />}
         />
         <MetricCard
@@ -213,16 +230,16 @@ export const CaseOverviewScreen: React.FC = () => {
         <MetricCard
           id="metric-sources"
           title="Source Checks"
-          value={currentCase.sourceChecksCount}
-          sublabel="Tier 1 & 2 sources"
+          value={sourceChecks.filter(s => !!s.evidenceReference).length}
+          sublabel="Recorded registry responses"
           icon={<Building2 className="w-4 h-4 text-[#237A57]" />}
         />
         <MetricCard
           id="metric-discrepancies"
           title="Discrepancies"
-          value={currentCase.discrepanciesCount}
-          sublabel={currentCase.discrepanciesCount > 0 ? 'Requires attention' : 'None detected'}
-          variant={currentCase.discrepanciesCount > 0 ? 'alert' : 'verified'}
+          value={currentCase.discrepanciesCount + evidenceFlags.length}
+          sublabel={currentCase.discrepanciesCount + evidenceFlags.length > 0 ? 'Requires attention' : 'No recorded flags'}
+          variant={currentCase.discrepanciesCount + evidenceFlags.length > 0 ? 'alert' : 'default'}
           icon={<AlertTriangle className="w-4 h-4 text-[#B83232]" />}
         />
         <MetricCard
@@ -304,24 +321,11 @@ export const CaseOverviewScreen: React.FC = () => {
                   Statutory Prerequisites Check
                 </h4>
                 <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                    <span>Statutory Citizenship</span>
-                    <span className="text-[#237A57] font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Verified by Birth Register
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                    <span>Academic Qualification</span>
-                    <span className="text-[#B7791F] font-semibold flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Date Amended (NADC Mismatch)
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                    <span>Ethical Bar Standing</span>
-                    <span className="text-[#237A57] font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Active Good Standing
-                    </span>
-                  </div>
+                  {prerequisiteChecks(candidate).map(check => <button key={check.type} type="button" className="w-full flex items-center justify-between gap-3 py-2 border-b border-slate-100 text-left hover:bg-slate-50"
+                    onClick={() => check.documents[0] ? navigateTo('workbench', { caseId: currentCase.id, candidateId: candidate.id, docId: check.documents[0].id }) : setActiveTab('DOCUMENTS')}>
+                    <span>{check.label}</span><span className="font-semibold text-amber-800">{check.status}</span>
+                  </button>)}
+                  <p className="text-slate-500">These are document evidence checks. Registry verification and final eligibility require separate review.</p>
                 </div>
               </div>
 
@@ -331,7 +335,7 @@ export const CaseOverviewScreen: React.FC = () => {
                 </h4>
                 <ul className="text-xs text-[#5B6777] space-y-1.5 list-disc pl-4 leading-relaxed">
                   <li>Assisted verification engine does not make legal disqualification rulings.</li>
-                  <li>All extracted claims cross-checked against primary government registers.</li>
+                  <li>OCR reads document text. Registry verification is unavailable until an authoritative connection is configured.</li>
                   <li>Candidate representation afforded via formal Information Request.</li>
                 </ul>
               </div>
@@ -421,7 +425,7 @@ export const CaseOverviewScreen: React.FC = () => {
                             f.normalizedValue
                           )}
                         </td>
-                        <td className="py-2.5 px-3 font-tabular">{f.extractionConfidence}%</td>
+                        <td className="py-2.5 px-3 font-tabular">{f.extractionConfidence == null ? 'Not scored' : f.extractionConfidence + '%'}</td>
                         <td className="py-2.5 px-3">
                           <StatusBadge status={f.sourceStatus} size="sm" />
                         </td>
@@ -444,97 +448,21 @@ export const CaseOverviewScreen: React.FC = () => {
               Independent verification queries against certified statutory registers and registries.
             </p>
             <div className="space-y-3">
-              <div className="p-3.5 bg-[#F5F7FA] rounded-lg border border-slate-200 flex items-center justify-between text-xs">
-                <div>
-                  <p className="font-bold text-[#17202A]">National Academic Degree Clearinghouse (NADC)</p>
-                  <p className="text-[11px] text-slate-500">Query Reference: NADC-TRX-2026-881920 • Response time: 342ms</p>
-                  <p className="text-[11px] text-slate-700 mt-1">
-                    Payload: Matched Student ID VSU-LAW-1999-0482. Degree JD conferred 2002-06-12.
-                  </p>
-                </div>
-                <StatusBadge status="VERIFIED" size="sm" />
-              </div>
-
-              <div className="p-3.5 bg-[#F5F7FA] rounded-lg border border-slate-200 flex items-center justify-between text-xs">
-                <div>
-                  <p className="font-bold text-[#17202A]">Supreme Judicial Bar of Pacifica Registry API</p>
-                  <p className="text-[11px] text-slate-500">Query Reference: BAR-PAC-API-VER-904 • Response time: 210ms</p>
-                  <p className="text-[11px] text-slate-700 mt-1">
-                    Payload: Roll #BAR-PAC-2003-8819. Status: Active in Good Standing.
-                  </p>
-                </div>
-                <StatusBadge status="VERIFIED" size="sm" />
-              </div>
+              {sourceChecks.length === 0 && <p className="text-xs text-slate-600">No registry responses recorded for this case.</p>}
+              {sourceChecks.map(check => <div key={check.id} className="p-3 bg-slate-50 border rounded text-xs">
+                <p className="font-semibold">{check.authorityName}</p><StatusBadge status={check.resultStatus} size="sm" />
+                <p className="mt-1">{check.responsePayloadSummary || 'No response payload recorded.'}</p>
+                {check.evidenceReference && <p>Evidence reference: {check.evidenceReference}</p>}
+              </div>)}
             </div>
           </div>
         )}
 
-        {/* REVIEW HISTORY TAB */}
-        {activeTab === 'HISTORY' && (
-          <div className="space-y-4 animate-fade-in">
-            <h3 className="text-sm font-bold text-[#17202A]">Review Notes & Timeline</h3>
-            <div className="space-y-3">
-              <div className="p-3.5 border-l-4 border-l-[#2F75B5] bg-[#F5F7FA] rounded-r-lg text-xs space-y-1">
-                <div className="flex items-center justify-between text-slate-500 text-[11px]">
-                  <span className="font-semibold text-[#17202A]">Elena Vance (Verification Analyst)</span>
-                  <span className="font-tabular">2026-08-26 11:20 UTC</span>
-                </div>
-                <p className="text-slate-800">
-                  Applied non-destructive field correction to conferral date pursuant to official NADC convocation register. Degree validity confirmed.
-                </p>
-              </div>
-
-              <div className="p-3.5 border-l-4 border-l-[#17324D] bg-[#F5F7FA] rounded-r-lg text-xs space-y-1">
-                <div className="flex items-center justify-between text-slate-500 text-[11px]">
-                  <span className="font-semibold text-[#17202A]">Amina Osei (Intake Officer)</span>
-                  <span className="font-tabular">2026-08-22 14:30 UTC</span>
-                </div>
-                <p className="text-slate-800">
-                  Initial candidate packet intake completed. 3 documents ingested and dispatched to automated extraction engine.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* AUDIT TAB */}
-        {activeTab === 'AUDIT' && (
-          <div className="space-y-4 animate-fade-in">
-            <h3 className="text-sm font-bold text-[#17202A]">Case Audit Log</h3>
-            <p className="text-xs text-[#5B6777]">
-              Immutable cryptographic ledger events specific to case {currentCase.caseReference}.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-[#5B6777] font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="py-2 px-3">Timestamp</th>
-                    <th className="py-2 px-3">Actor</th>
-                    <th className="py-2 px-3">Action</th>
-                    <th className="py-2 px-3">Reason</th>
-                    <th className="py-2 px-3">Hash</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
-                  <tr>
-                    <td className="py-2.5 px-3">2026-08-26 11:20:14</td>
-                    <td className="py-2.5 px-3 font-sans">Elena Vance</td>
-                    <td className="py-2.5 px-3 font-sans">FIELD_VALUE_CORRECTED</td>
-                    <td className="py-2.5 px-3 font-sans">REGISTRAR_RECORDS_AMENDMENT</td>
-                    <td className="py-2.5 px-3 text-slate-400">sha256:7f83b1...</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3">2026-08-26 09:16:30</td>
-                    <td className="py-2.5 px-3 font-sans">NADC Connector</td>
-                    <td className="py-2.5 px-3 font-sans">SOURCE_QUERY_COMPLETED</td>
-                    <td className="py-2.5 px-3 font-sans">Automated query</td>
-                    <td className="py-2.5 px-3 text-slate-400">sha256:8899aa...</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {(activeTab === 'HISTORY' || activeTab === 'AUDIT') && <div className="space-y-3">
+          <h3 className="text-sm font-bold">Case Review History</h3>
+          {caseAudit.length === 0 && <p className="text-xs text-slate-600">No review events recorded for this case.</p>}
+          {caseAudit.map(event => <div key={event.id} className="p-3 bg-slate-50 border rounded text-xs"><p className="font-semibold">{event.actorName} - {event.timestamp}</p><p>{event.summary || event.description}</p><p>{event.reason}</p></div>)}
+        </div>}
 
         {/* NOTICES & RFI CLARIFICATIONS TAB */}
         {activeTab === 'NOTICES' && (

@@ -43,6 +43,7 @@ export type CredentialType =
   | 'SECURITY_CLEARANCE'
   | 'BIRTH_CERTIFICATE'
   | 'NYSC_CERTIFICATE'
+  | 'WAEC_CERTIFICATE'
   | 'PARTY_NOMINATION';
 
 export type CorrectionReasonCode = 
@@ -62,7 +63,7 @@ export interface EvidenceRegion {
 }
 
 export interface QualityWarning {
-  type: 'BLURRY' | 'SKEWED' | 'LOW_RESOLUTION' | 'PARTIAL_TRUNCATION' | 'SUSPICIOUS_ARTIFACT';
+  type: 'BLURRY' | 'SKEWED' | 'LOW_RESOLUTION' | 'PARTIAL_TRUNCATION' | 'SUSPICIOUS_ARTIFACT' | 'MISSING_FIELD' | 'LOW_CONFIDENCE' | 'AMBIGUOUS_FIELD' | 'NO_TEXT';
   message: string;
   severity: 'WARNING' | 'CRITICAL';
 }
@@ -79,7 +80,8 @@ export interface ExtractedField {
   correctionReasonNote?: string;
   correctionNote?: string;
   reviewerNote?: string;
-  extractionConfidence: number; // 0 to 100 percentage
+  extractionConfidence: number | null; // null for PDF text/manual entries; no OCR score exists
+  extractionMethod?: 'OCR' | 'PDF_TEXT' | 'MANUAL';
   status: VerificationStatus;
   evidencePage: number;
   evidenceRegion: EvidenceRegion;
@@ -90,6 +92,8 @@ export interface ExtractedField {
 }
 
 export interface SubmittedDocument {
+  originalStorageStatus?: 'LOCAL_ONLY' | 'PENDING' | 'SYNCED';
+  originalStorageError?: string;
   id: string;
   candidateId: string;
   credentialType: CredentialType;
@@ -100,6 +104,10 @@ export interface SubmittedDocument {
   mimeType: string;
   totalPages: number;
   fileUrl?: string;
+  extractionStatus?: 'PENDING' | 'COMPLETE' | 'FAILED' | 'NEEDS_REEXTRACTION';
+  extractionError?: string;
+  extractionVersion?: number;
+  rawText?: string;
   extractedFields: ExtractedField[];
   qualityWarnings: QualityWarning[];
   status: VerificationStatus;
@@ -197,6 +205,7 @@ export interface Candidate {
 }
 
 export interface VerificationCase {
+  syncPending?: boolean;
   is_demo?: boolean;
   id: string;
   caseReference: string;

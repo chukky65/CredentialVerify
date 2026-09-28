@@ -78,8 +78,8 @@ export const DossierModal: React.FC<DossierModalProps> = ({
       onClose={onClose}
       onConfirm={() => handleCompile('PDF')}
       title="Compile Statutory Evidence Dossier"
-      description={`Generate an immutable multi-section case binder for ${caseRecord.candidateName} (${caseRecord.caseReference}) ready for commission review.`}
-      confirmLabel={isCompiling ? 'Compiling Dossier...' : 'Compile & Open Binder'}
+      description={`Compile recorded evidence for ${candidate.fullName} (${caseRecord.caseReference}). This is a review binder, not a publication or ballot clearance.`}
+      confirmLabel={isCompiling ? 'Compiling Dossier...' : 'Download Printable Binder'}
       cancelLabel="Cancel"
       variant="primary"
       isProcessing={isCompiling}
@@ -116,7 +116,7 @@ export const DossierModal: React.FC<DossierModalProps> = ({
                 className="rounded border-slate-300 text-[#17324D] focus:ring-[#2F75B5]"
               />
               <span className="font-medium text-slate-800">
-                1. Full Document Index & Extracted Vector Evidence Claims ({candidate.documents.length} Docs)
+                1. Document Index & Extracted Claims ({candidate.documents.length} Docs; originals remain in the viewer)
               </span>
             </label>
 

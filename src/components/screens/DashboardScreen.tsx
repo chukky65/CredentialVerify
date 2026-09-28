@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+import { dashboardMetrics, dailyActivity, timestamp } from '../../services/dashboardMetrics';
+import { SOURCE_CONNECTORS } from '../../data/sourceConnectors';
+import { NIGERIA_JURISDICTIONS } from '../../data/jurisdictions';
+import { electionOptions, scopeRecords } from '../../services/electionScope';
 import { useApp } from '../../context/AppContext';
 import { MetricCard } from '../common/MetricCard';
 import { StatusBadge } from '../common/StatusBadge';
@@ -33,45 +37,37 @@ import {
 } from 'recharts';
 
 export const DashboardScreen: React.FC = () => {
-  const { cases, candidates, navigateTo, addToast, setActiveCaseId } = useApp();
+  const { cases, candidates, navigateTo, addToast, setActiveCaseId, refreshData } = useApp();
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('ALL');
   const [selectedElection, setSelectedElection] = useState<string>('ALL');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setIsRefreshing(false);
-    addToast('Dashboard metrics refreshed from authoritative ledger.', 'info');
+    try {
+      await refreshData();
+      addToast('Dashboard refreshed from available records.', 'info');
+    } catch {
+      addToast('Unable to refresh dashboard records.', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  // Filter cases according to selections
-  const filteredCases = cases.filter((c) => {
-    if (selectedJurisdiction !== 'ALL' && c.jurisdiction !== selectedJurisdiction) return false;
-    if (selectedElection !== 'ALL' && c.electionName !== selectedElection) return false;
-    return true;
-  });
+  const scoped = scopeRecords(candidates, cases, selectedElection, selectedJurisdiction);
+  const filteredCases = scoped.cases;
+  const elections = electionOptions([...candidates, ...cases]);
+  const jurisdictions = Array.from(new Set(['National (All States)', ...NIGERIA_JURISDICTIONS.map(s => s.state), ...candidates.map(c => c.jurisdiction), ...cases.map(c => c.jurisdiction)])).filter(Boolean);
 
-  // Calculate high-level KPIs
-  const totalSubmissions = candidates.length;
-  const pendingCount = filteredCases.filter((c) => c.workflowStatus === 'PENDING').length;
-  const needsReviewCount = filteredCases.filter((c) => c.workflowStatus === 'NEEDS_REVIEW').length;
-  const infoReqCount = filteredCases.filter((c) => c.workflowStatus === 'INFO_REQUIRED').length;
-  const completedCount = filteredCases.filter((c) => c.workflowStatus === 'VERIFIED').length;
-  const urgentCount = filteredCases.filter((c) => c.priority === 'URGENT' || c.workflowStatus === 'CONTRADICTED').length;
-
-  // Chart data: 7-day intake vs throughput activity (dynamically calculated)
-  const activityMap: Record<string, any> = {};
-  filteredCases.forEach((c) => {
-    const day = c.submissionDate.substring(5, 10); // MM-DD
-    if (!activityMap[day]) {
-      activityMap[day] = { day, intake: 0, verified: 0, flagged: 0 };
-    }
-    activityMap[day].intake++;
-    if (c.workflowStatus === 'VERIFIED') activityMap[day].verified++;
-    if (c.workflowStatus === 'CONTRADICTED' || c.workflowStatus === 'RESTRICTED') activityMap[day].flagged++;
-  });
-  const activityData = Object.values(activityMap).sort((a: any, b: any) => a.day.localeCompare(b.day));
+  const totalSubmissions = scoped.candidates.length;
+  const metrics = dashboardMetrics(filteredCases);
+  const pendingCount = metrics.pending;
+  const needsReviewCount = metrics.needsReview;
+  const infoReqCount = metrics.infoRequested;
+  const completedCount = metrics.verified;
+  const urgentCount = metrics.approachingSla;
+  const activityData = dailyActivity(filteredCases);
+  const openQueue = (status: string) => navigateTo('queue?' + new URLSearchParams({ status, election: selectedElection, jurisdiction: selectedJurisdiction }));
 
   // Distribution chart data
   const statusPieData = [
@@ -91,22 +87,15 @@ export const DashboardScreen: React.FC = () => {
       workloadMap[c.assignedReviewerName] = { name: c.assignedReviewerName, role: 'Reviewer', active: 0, completed: 0, overdue: 0 };
     }
     const wl = workloadMap[c.assignedReviewerName];
-    if (c.workflowStatus === 'VERIFIED') wl.completed++;
-    else wl.active++;
+    if (c.workflowStatus === 'VERIFIED' && c.recommendation?.submittedTimestamp?.slice(0, 10) === new Date().toISOString().slice(0, 10)) wl.completed++;
+    if (c.workflowStatus !== 'VERIFIED') wl.active++;
     // Very simple overdue check (just string comparison for demo)
-    if (c.slaDeadline < new Date().toISOString()) wl.overdue++;
+    if (c.workflowStatus !== 'VERIFIED' && timestamp(c.slaDeadline) < Date.now()) wl.overdue++;
   });
   const officerWorkload = Object.values(workloadMap);
 
   // Source connectors health summary
-  const sourceConnectors = [
-    { name: 'Nigerian Universities Portal', status: 'HEALTHY', latency: '342ms', tier: 'Tier 1' },
-    { name: 'National Youth Service Corps (NYSC)', status: 'HEALTHY', latency: '210ms', tier: 'Tier 1' },
-    { name: 'National Population Commission (NPC)', status: 'HEALTHY', latency: '185ms', tier: 'Tier 1' },
-    { name: 'LGA Validation Gateway', status: 'DEGRADED', latency: '8.2s', tier: 'Tier 2' },
-    { name: 'National Police Criminal Index', status: 'HEALTHY', latency: '410ms', tier: 'Tier 1' },
-    { name: 'Department of Revenue Gateway', status: 'OFFLINE', latency: 'Timeout', tier: 'Tier 1' },
-  ];
+  const sourceConnectors = SOURCE_CONNECTORS;
 
   return (
     <div className="space-y-6 pb-12">
@@ -124,10 +113,8 @@ export const DashboardScreen: React.FC = () => {
             onChange={(e) => setSelectedElection(e.target.value)}
             className="text-xs bg-[#F5F7FA] border border-slate-300 rounded-md px-3 py-1.5 text-[#17202A] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
           >
-            <option value="ALL">All Elections (3 Active)</option>
-            <option value="2027 General Elections">2027 General Elections</option>
-            <option value="2027 Gubernatorial Elections">2027 Gubernatorial Elections</option>
-            <option value="2027 State Assembly Elections">2027 State Assembly Elections</option>
+            <option value="ALL">All Elections</option>
+            {elections.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
 
           <select
@@ -137,58 +124,7 @@ export const DashboardScreen: React.FC = () => {
             className="text-xs bg-[#F5F7FA] border border-slate-300 rounded-md px-3 py-1.5 text-[#17202A] focus:outline-none focus:ring-1 focus:ring-[#2F75B5]"
           >
             <option value="ALL">All Jurisdictions</option>
-            <optgroup label="Federal">
-              <option value="National (All States)">National (All States)</option>
-            </optgroup>
-            <optgroup label="States">
-              <option value="Abia State">Abia State</option>
-              <option value="Adamawa State">Adamawa State</option>
-              <option value="Akwa Ibom State">Akwa Ibom State</option>
-              <option value="Anambra State">Anambra State</option>
-              <option value="Bauchi State">Bauchi State</option>
-              <option value="Bayelsa State">Bayelsa State</option>
-              <option value="Benue State">Benue State</option>
-              <option value="Borno State">Borno State</option>
-              <option value="Cross River State">Cross River State</option>
-              <option value="Delta State">Delta State</option>
-              <option value="Ebonyi State">Ebonyi State</option>
-              <option value="Edo State">Edo State</option>
-              <option value="Ekiti State">Ekiti State</option>
-              <option value="Enugu State">Enugu State</option>
-              <option value="FCT - Abuja">FCT - Abuja</option>
-              <option value="Gombe State">Gombe State</option>
-              <option value="Imo State">Imo State</option>
-              <option value="Jigawa State">Jigawa State</option>
-              <option value="Kaduna State">Kaduna State</option>
-              <option value="Kano State">Kano State</option>
-              <option value="Katsina State">Katsina State</option>
-              <option value="Kebbi State">Kebbi State</option>
-              <option value="Kogi State">Kogi State</option>
-              <option value="Kwara State">Kwara State</option>
-              <option value="Lagos State">Lagos State</option>
-              <option value="Nasarawa State">Nasarawa State</option>
-              <option value="Niger State">Niger State</option>
-              <option value="Ogun State">Ogun State</option>
-              <option value="Ondo State">Ondo State</option>
-              <option value="Osun State">Osun State</option>
-              <option value="Oyo State">Oyo State</option>
-              <option value="Plateau State">Plateau State</option>
-              <option value="Rivers State">Rivers State</option>
-              <option value="Sokoto State">Sokoto State</option>
-              <option value="Taraba State">Taraba State</option>
-              <option value="Yobe State">Yobe State</option>
-              <option value="Zamfara State">Zamfara State</option>
-            </optgroup>
-            <optgroup label="Senatorial Districts">
-              <option value="Lagos Central Senatorial District">Lagos Central Senatorial District</option>
-              <option value="Kano South Senatorial District">Kano South Senatorial District</option>
-              <option value="Rivers East Senatorial District">Rivers East Senatorial District</option>
-            </optgroup>
-            <optgroup label="Local Government Areas">
-              <option value="Ikeja LGA">Ikeja LGA</option>
-              <option value="Kano Municipal LGA">Kano Municipal LGA</option>
-              <option value="Port Harcourt LGA">Port Harcourt LGA</option>
-            </optgroup>
+            {jurisdictions.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
 
@@ -213,6 +149,7 @@ export const DashboardScreen: React.FC = () => {
         </div>
       </div>
 
+      {cases.some(c => c.syncPending) && <p role="status" className="text-xs text-blue-900 bg-blue-50 p-2 rounded">Some reviews are saved on this device and awaiting server sync. Refresh Feed retries synchronization.</p>}
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <MetricCard
@@ -230,7 +167,7 @@ export const DashboardScreen: React.FC = () => {
           sublabel="In automated intake"
           variant="default"
           icon={<Clock className="w-5 h-5 text-slate-600" />}
-          onClick={() => navigateTo('queue')}
+          onClick={() => openQueue('PENDING')}
         />
         <MetricCard
           id="metric-needs-review"
@@ -239,7 +176,7 @@ export const DashboardScreen: React.FC = () => {
           sublabel="Analyst check needed"
           variant="warning"
           icon={<AlertTriangle className="w-5 h-5 text-[#B7791F]" />}
-          onClick={() => navigateTo('queue')}
+          onClick={() => openQueue('NEEDS_REVIEW')}
         />
         <MetricCard
           id="metric-info-req"
@@ -248,7 +185,7 @@ export const DashboardScreen: React.FC = () => {
           sublabel="Awaiting candidate"
           variant="info"
           icon={<HelpCircle className="w-5 h-5 text-[#C56A1A]" />}
-          onClick={() => navigateTo('queue')}
+          onClick={() => openQueue('INFO_REQUIRED')}
         />
         <MetricCard
           id="metric-completed"
@@ -257,16 +194,16 @@ export const DashboardScreen: React.FC = () => {
           sublabel="Prerequisites met"
           variant="verified"
           icon={<CheckCircle2 className="w-5 h-5 text-[#237A57]" />}
-          onClick={() => navigateTo('queue')}
+          onClick={() => openQueue('COMPLETED')}
         />
         <MetricCard
           id="metric-sla"
           title="Approaching SLA"
           value={urgentCount}
-          sublabel="< 24h deadline / Alert"
+          sublabel="Due within 24h or overdue"
           variant="alert"
           icon={<Clock className="w-5 h-5 text-[#B83232]" />}
-          onClick={() => navigateTo('queue')}
+          onClick={() => openQueue('SLA')}
         />
       </div>
 
@@ -280,7 +217,7 @@ export const DashboardScreen: React.FC = () => {
               <p className="text-xs text-[#5B6777]">Candidate intake vs verified decisions over 7 days</p>
             </div>
             <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[11px] font-medium">
-              Statutory 72h SLA
+              72h review target
             </span>
           </div>
 
@@ -295,7 +232,6 @@ export const DashboardScreen: React.FC = () => {
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
                 <Bar dataKey="intake" name="New Submissions" fill="#2F75B5" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="verified" name="Verified Satisfied" fill="#237A57" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="flagged" name="Discrepancies Flagged" fill="#B83232" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -354,7 +290,7 @@ export const DashboardScreen: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => navigateTo('queue')}
+              onClick={() => openQueue('ALL')}
               className="text-xs font-semibold text-[#2F75B5] hover:text-[#17324D] flex items-center gap-1"
             >
               <span>View Full Queue</span>
@@ -376,6 +312,7 @@ export const DashboardScreen: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {filteredCases.length === 0 && <tr><td colSpan={7} className="py-6 text-center text-slate-500">No cases match the selected scope.</td></tr>}
                 {filteredCases.slice(0, 5).map((item) => (
                   <tr
                     key={item.id}
@@ -443,7 +380,7 @@ export const DashboardScreen: React.FC = () => {
           </div>
 
           <p className="text-xs text-[#5B6777]">
-            Real-time health of statutory API connectors for authoritative evidence queries.
+            Connection status of configured authoritative sources.
           </p>
 
           <div className="space-y-2.5">
@@ -461,7 +398,7 @@ export const DashboardScreen: React.FC = () => {
                 <div className="text-right shrink-0">
                   <StatusBadge status={src.status} size="sm" />
                   <span className="block text-[10px] text-slate-400 font-tabular mt-0.5">
-                    {src.latency}
+                    {src.avgLatency}
                   </span>
                 </div>
               </div>
@@ -469,7 +406,7 @@ export const DashboardScreen: React.FC = () => {
           </div>
 
           <div className="p-3 rounded bg-amber-50 border border-amber-200/80 text-[11px] text-amber-900 leading-snug">
-            <strong>Operational Note:</strong> Department of Revenue Gateway is currently offline. Claims requiring tax clearance must be verified manually or queued.
+            <strong>Operational Note:</strong> Source connections are not configured. Health measurements and registry responses are not yet available.
           </div>
         </div>
       </div>

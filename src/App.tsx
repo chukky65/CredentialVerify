@@ -73,8 +73,10 @@ const MainLayout: React.FC = () => {
             <Route path="/reports" element={<ReportsScreen />} />
             <Route path="/gazette" element={<GazetteScreen />} />
             <Route path="/audit" element={<AuditTrailScreen />} />
+            <Route path="/audit-trail" element={<AuditTrailScreen />} />
             <Route path="/configuration" element={<ConfigurationScreen />} />
             <Route path="/users" element={<UserManagementScreen />} />
+            <Route path="/user-management" element={<UserManagementScreen />} />
             <Route path="/workbench" element={<DocumentWorkbench />} />
             <Route path="*" element={
               <div className="flex flex-col items-center justify-center h-full text-center">

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SOURCE_CONNECTORS } from '../../data/sourceConnectors';
 import { useApp } from '../../context/AppContext';
 import { StatusBadge } from '../common/StatusBadge';
 import {
@@ -19,108 +20,10 @@ export const SourceChecksScreen: React.FC = () => {
   const { addToast } = useApp();
   const [testingConnectorId, setTestingConnectorId] = useState<string | null>(null);
 
-  const [connectors, setConnectors] = useState([
-    {
-      id: 'conn_nadc',
-      name: 'National Academic Degree Clearinghouse (NADC)',
-      acronym: 'NADC',
-      tier: 'Tier 1 Certified Statutory Registry',
-      protocol: 'REST / OAuth2 Mutual TLS',
-      endpoint: 'https://api.nadc.gov.pac/v3/credentials/verify',
-      status: 'HEALTHY',
-      uptime: '99.98%',
-      avgLatency: '342ms',
-      lastPing: '2026-08-26 11:28 UTC',
-      totalQueriesToday: 142,
-      successRate: '99.3%',
-      description: 'Official national central clearinghouse for accredited higher education degrees, graduation dates, and honorary titles.',
-    },
-    {
-      id: 'conn_bar',
-      name: 'Supreme Judicial Bar of Pacifica Registry API',
-      acronym: 'PAC_BAR',
-      tier: 'Tier 1 Statutory Registry',
-      protocol: 'JSON-RPC / Webhook Handshake',
-      endpoint: 'https://registry.pacifica-bar.org/api/attorneys/roll',
-      status: 'HEALTHY',
-      uptime: '100%',
-      avgLatency: '210ms',
-      lastPing: '2026-08-26 11:29 UTC',
-      totalQueriesToday: 48,
-      successRate: '100%',
-      description: 'Official roll of certified legal practitioners, bar admission dates, disciplinary history, and active good standing certificates.',
-    },
-    {
-      id: 'conn_nrcs',
-      name: 'National Civil Status & Population Register',
-      acronym: 'NRCS',
-      tier: 'Tier 1 Sovereign Identity Register',
-      protocol: 'SOAP / WSDL Encrypted Gateway',
-      endpoint: 'https://nrcs.gov.pac/soap/identity/v2',
-      status: 'HEALTHY',
-      uptime: '99.95%',
-      avgLatency: '185ms',
-      lastPing: '2026-08-26 11:27 UTC',
-      totalQueriesToday: 215,
-      successRate: '99.8%',
-      description: 'Central civil registration ledger verifying statutory citizenship by birth or naturalization, legal name changes, and birth dates.',
-    },
-    {
-      id: 'conn_police',
-      name: 'National Police Criminal Record & Clearances Gateway',
-      acronym: 'NPCG',
-      tier: 'Tier 1 Law Enforcement Index',
-      protocol: 'REST / Mutual TLS Bearer',
-      endpoint: 'https://clearance.police.gov.pac/api/v1/certificates',
-      status: 'HEALTHY',
-      uptime: '99.82%',
-      avgLatency: '410ms',
-      lastPing: '2026-08-26 11:25 UTC',
-      totalQueriesToday: 89,
-      successRate: '98.9%',
-      description: 'Statutory background and non-conviction clearance register for candidate electoral security prerequisite filings.',
-    },
-    {
-      id: 'conn_tax',
-      name: 'Department of Revenue Tax Compliance Gateway',
-      acronym: 'DOR_TAX',
-      tier: 'Tier 1 Revenue Register',
-      protocol: 'REST / HMAC-SHA256 Token',
-      endpoint: 'https://gateway.revenue.gov.pac/v2/taxpayer/status',
-      status: 'OFFLINE',
-      uptime: '94.20%',
-      avgLatency: 'Timeout',
-      lastPing: '2026-08-26 11:29 UTC (Failed)',
-      totalQueriesToday: 32,
-      successRate: '71.8%',
-      description: 'Public integrity asset filing verification and statutory tax clearance certificate validator.',
-    },
-    {
-      id: 'conn_archives',
-      name: 'National Historical Archives Document Gateway',
-      acronym: 'ARCHIVES',
-      tier: 'Tier 2 Supplemental Archive',
-      protocol: 'OpenSearch Document Interface',
-      endpoint: 'https://archives.gov.pac/search/historical/filings',
-      status: 'DEGRADED',
-      uptime: '96.50%',
-      avgLatency: '8.2s',
-      lastPing: '2026-08-26 11:24 UTC',
-      totalQueriesToday: 15,
-      successRate: '88.0%',
-      description: 'Supplemental archive for historical naturalization documents, land deed records, and gazette notices older than 30 years.',
-    },
-  ]);
+  const connectors = SOURCE_CONNECTORS;
 
-  const handleTestPing = async (id: string, name: string) => {
-    setTestingConnectorId(id);
-    await new Promise((r) => setTimeout(r, 600));
-    setTestingConnectorId(null);
-    if (id === 'conn_tax') {
-      addToast(`Connector [${name}] ping failed: Connection refused (HTTP 503 Service Unavailable).`, 'error');
-    } else {
-      addToast(`Connector [${name}] responded in 214ms. Diagnostic handshake certified.`, 'success');
-    }
+  const handleTestPing = async (_id: string, name: string) => {
+    addToast(name + ': connection is not configured. No health query was sent.', 'warning');
   };
 
   return (
@@ -130,13 +33,13 @@ export const SourceChecksScreen: React.FC = () => {
         <div>
           <h2 className="text-base font-bold text-[#17202A]">Authoritative Source Connectors</h2>
           <p className="text-xs text-[#5B6777] mt-0.5">
-            Real-time telemetry, cryptographic keys, and connectivity health of government registry APIs.
+            Authoritative sources for credential checks. Connections must be configured before health measurements are available.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={() => addToast('All source health pings dispatched.', 'info')}
+          onClick={() => addToast('These six source connections are not configured. No health queries were sent.', 'warning')}
           className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50"
         >
           <RefreshCw className="w-3.5 h-3.5 text-slate-500" />

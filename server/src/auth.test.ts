@@ -1,51 +1,20 @@
+import { jest, describe, it, expect } from '@jest/globals';
 import request from 'supertest';
+import { hashPassword } from './passwords';
+const findFirst = jest.fn<(...args: any[]) => Promise<any>>();
+jest.mock('@prisma/client', () => {
+  const actual = jest.requireActual<any>('@prisma/client');
+  return { ...actual, PrismaClient: jest.fn(() => ({ staffAccount: { findFirst: (...args: any[]) => findFirst(...args) } })) };
+});
 import app from './index';
-
-describe('Authentication Middleware and Endpoints', () => {
-  let token = '';
-
-  beforeAll(() => {
-    // Override demo mode to test actual auth logic if necessary,
-    // or just rely on the fallback. 
-    process.env.NODE_ENV = 'test';
-    // If DEMO_MODE is true, it just bypasses the strict logic, so we can test the token endpoint directly.
-  });
-
-  it('should reject access to protected routes without a token', async () => {
-    // If DEMO_MODE is true, it will actually pass. Let's force it false for the test.
-    const originalDemoMode = process.env.DEMO_MODE;
-    process.env.DEMO_MODE = 'false';
-
-    const res = await request(app).get('/api/candidates');
-    expect(res.status).toBe(401);
-    expect(res.body.error).toBe('Access token required');
-
-    process.env.DEMO_MODE = originalDemoMode;
-  });
-
-  it('should authenticate a valid login and return a token', async () => {
-    const res = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'test@example.com', password: 'password123' });
-    
-    expect(res.status).toBe(200);
-    expect(res.body.token).toBeDefined();
-    token = res.body.token;
-  });
-
-  it('should allow access to protected routes with a valid token', async () => {
-    const originalDemoMode = process.env.DEMO_MODE;
-    process.env.DEMO_MODE = 'false'; // force strict check
-
-    const res = await request(app)
-      .get('/api/candidates')
-      .set('Authorization', `Bearer ${token}`);
-    
-    // Either 200 or 500 (if DB is down). Since Postgres isn't running, it will be 500.
-    // The point is it shouldn't be 401 or 403.
-    expect(res.status).not.toBe(401);
-    expect(res.status).not.toBe(403);
-
-    process.env.DEMO_MODE = originalDemoMode;
+describe('staff sign-in', () => {
+  it('rejects arbitrary credentials and accepts only an active account password', async () => {
+    process.env.JWT_SECRET = 'a-test-secret-with-at-least-32-characters';
+    findFirst.mockResolvedValue(null);
+    expect((await request(app).post('/api/auth/login').send({email:'unknown',password:'anything'})).status).toBe(401);
+    findFirst.mockResolvedValue({id:'staff',email:'reviewer@example.com',staffId:'STAFF-1',name:'Reviewer',role:'VERIFICATION_ANALYST',active:true,passwordHash:hashPassword('a-long-test-password')});
+    expect((await request(app).post('/api/auth/login').send({email:'reviewer@example.com',password:'wrong'})).status).toBe(401);
+    const result=await request(app).post('/api/auth/login').send({email:'reviewer@example.com',password:'a-long-test-password'});
+    expect(result.status).toBe(200); expect(result.body.token).toBeTruthy(); expect(result.body.user.passwordHash).toBeUndefined(); expect(result.body.user.id).toBe('staff');
   });
 });

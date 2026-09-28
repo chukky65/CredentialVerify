@@ -65,7 +65,7 @@ const USERS: UserAccount[] = [
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [currentUser, setCurrentUser] = useState<UserAccount>(USERS[0]); // default: Elena Vance (Analyst)
+  const [currentUser, setCurrentUser] = useState<UserAccount>(() => { try { return JSON.parse(localStorage.getItem('credential_verify_user') || 'null') || USERS[0]; } catch { return USERS[0]; } }); // default: Elena Vance (Analyst)
   const currentRoute = location.pathname.substring(1) || 'dashboard'; // fallback
   const [activeCaseId, setActiveCaseId] = useState<string>('case_001');
   const [activeCandidateId, setActiveCandidateId] = useState<string>('cand_001');
@@ -155,6 +155,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const switchRole = (role: UserRole) => {
+    if (localStorage.getItem('token')) { addToast('Sign out and sign in with the other staff account to change roles.', 'warning'); return; }
     const match = USERS.find((u) => u.role === role) || USERS[0];
     setCurrentUser(match);
     addToast(`Switched active user context to ${match.name} (${role.replace(/_/g, ' ')})`, 'info');
